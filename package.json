@@ -1,0 +1,30 @@
+{
+  "name": "mcp-oci-logan-server",
+  "version": "1.0.0",
+  "description": "MCP Server for OCI Logging Analytics integration with Logan Security Dashboard",
+  "main": "dist/index.js",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsc && node dist/index.js",
+    "test": "node test-server.js"
+  },
+  "keywords": [
+    "mcp",
+    "oci",
+    "logging-analytics",
+    "security",
+    "logan"
+  ],
+  "author": "Logan Security Dashboard Team",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.15.0",
+    "oci-sdk": "^2.98.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.0",
+    "typescript": "^5.8.3"
+  }
+}
