@@ -1,5 +1,13 @@
 # MCP OCI Logan Server
 
+## ⚠️ Disclaimer
+
+This software was created to showcase Oracle Cloud Infrastructure (OCI) Logging Analytics capabilities and demonstrate how to expand them using third-party services and AI tools. The architecture and code were written by me with the assistance of Oracle Code Assist and multiple LLMs including Claude, OpenAI GPT-4o, Meta Llama 3.2, and Grok 3. This is an educational project designed to learn more about OCI's service capabilities and how to optimize security monitoring tasks through AI integration.
+
+**This is NOT an official Oracle product** - it is a personal project demonstrating integration possibilities with OCI Logging Analytics and AI assistants.
+
+---
+
 A Model Context Protocol (MCP) server that connects Claude to Oracle Cloud Infrastructure (OCI) Logging Analytics, enabling natural language querying and analysis of security logs from the Logan Security Dashboard.
 
 ## Features
@@ -39,7 +47,7 @@ A Model Context Protocol (MCP) server that connects Claude to Oracle Cloud Infra
 ### 1. Clone and Install
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/adibirzu/mcp-oci-logan-server.git
 cd mcp-oci-logan-server
 npm install
 npm run build
@@ -321,5 +329,4 @@ MIT License - see LICENSE file for details.
 ---
 
 **Version**: 1.0.0  
-**Author**: Logan Security Dashboard Team  
 **Last Updated**: January 2025
