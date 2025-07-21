@@ -21,7 +21,9 @@
   "license": "MIT",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.15.0",
-    "oci-sdk": "^2.98.0"
+    "date-fns": "^4.1.0",
+    "oci-sdk": "^2.98.0",
+    "react-dropzone": "^14.3.8"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
