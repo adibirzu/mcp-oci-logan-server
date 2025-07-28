@@ -295,6 +295,24 @@ npm run dev      # Development mode
 npm run test     # Run tests
 ```
 
+### Git Repository Setup
+
+The repository is configured to exclude unnecessary files from version control:
+
+**Ignored Files:**
+- `python/venv/` - Python virtual environment (created by setup-python.sh)
+- `dist/` (optional) - TypeScript compiled output
+- `claude_desktop_config.json` - Local Claude Desktop configuration
+- Debug logs (`*.log`, `/tmp/mcp-*.log`)
+- Credentials (`*.pem`, `*.key`, `config`)
+- Test files (`test-*.js`, `test-*.ts`)
+
+**Setup for New Developers:**
+1. Copy `claude_desktop_config.json.template` to `claude_desktop_config.json`
+2. Update paths and OCI compartment ID in the config
+3. Run `./setup-python.sh` to create Python virtual environment
+4. The `python/venv/` directory will be automatically ignored
+
 ### Project Structure
 
 ```

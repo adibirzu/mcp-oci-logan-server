@@ -21,7 +21,9 @@
   "license": "MIT",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.15.0",
+    "@types/node-fetch": "^2.6.12",
     "date-fns": "^4.1.0",
+    "node-fetch": "^3.3.2",
     "oci-sdk": "^2.98.0",
     "react-dropzone": "^14.3.8"
   },

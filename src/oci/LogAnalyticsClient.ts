@@ -2,6 +2,7 @@ import * as oci from 'oci-sdk';
 import { promises as fs } from 'fs';
 import { homedir } from 'os';
 import path from 'path';
+import { spawn } from 'child_process';
 
 export interface QueryRequest {
   query: string;
@@ -16,6 +17,10 @@ export interface QueryResult {
   data: any[];
   executionTime: number;
   queryId?: string;
+  success: boolean;
+  error?: string;
+  queryUsed?: string;
+  arePartialResults?: boolean;
 }
 
 export interface ConnectionStatus {
@@ -30,6 +35,7 @@ export class LogAnalyticsClient {
   private client: oci.loganalytics.LogAnalyticsClient | null = null;
   private provider: any = null;
   private config: any = {};
+  private namespace: string = '';
 
   constructor() {
     // Don't wait for initialization in constructor
@@ -52,6 +58,9 @@ export class LogAnalyticsClient {
           authenticationDetailsProvider: this.provider
         });
       }
+
+      // Get namespace
+      this.namespace = await this.getNamespace();
     } catch (error) {
       console.error('Failed to initialize OCI client:', error);
     }
@@ -63,7 +72,7 @@ export class LogAnalyticsClient {
       const configContent = await fs.readFile(configPath, 'utf8');
       
       // Parse OCI config file
-      const lines = configContent.split('\\n');
+      const lines = configContent.split('\n');
       let currentProfile = 'DEFAULT';
       const profiles: { [key: string]: any } = {};
       
@@ -99,7 +108,6 @@ export class LogAnalyticsClient {
     try {
       // Try instance principal first (for OCI compute instances)
       if (await this.isRunningOnOCI()) {
-        // Use the available auth provider from OCI SDK
         this.provider = new oci.ConfigFileAuthenticationDetailsProvider();
         return;
       }
@@ -130,87 +138,249 @@ export class LogAnalyticsClient {
     }
   }
 
+  /**
+   * Execute query by calling the standalone Python client
+   */
   async executeQuery(request: QueryRequest): Promise<QueryResult> {
-    // Ensure client is initialized
-    if (!this.client) {
-      await this.initializeClient();
-    }
-    
-    if (!this.client) {
-      throw new Error('OCI LogAnalytics client not initialized');
-    }
-
     const startTime = Date.now();
     
     try {
-      const compartmentId = request.compartmentId || this.config.compartment_id || this.config.tenancy;
       
-      if (!compartmentId) {
-        throw new Error('No compartment ID available. Please configure OCI_COMPARTMENT_ID environment variable or OCI config file.');
+      // Process query - fix common OCI API compatibility issues
+      let processedQuery = request.query;
+      processedQuery = this.fixQuerySyntax(processedQuery);
+
+      const timeRangeMinutes = this.parseTimeRange(request.timeRange || '24h');
+
+      // Get the path to our internal Python client using absolute path
+      const pythonScriptPath = '/Users/abirzu/dev/mcp-oci-logan-server/python/logan_client.py';
+
+      // Call the internal Python Logan client
+      const pythonArgs = [
+        pythonScriptPath,
+        'query',
+        '--query', processedQuery,
+        '--time-period', timeRangeMinutes.toString()
+      ];
+
+      console.error('MCP DEBUG: Executing query via Python client:', processedQuery);
+      console.error('MCP DEBUG: Time range:', timeRangeMinutes, 'minutes');
+      
+      // Also write to a debug file for troubleshooting
+      try {
+        const fsSync = require('fs');
+        const debugInfo = {
+          timestamp: new Date().toISOString(),
+          query: processedQuery,
+          timeRange: timeRangeMinutes,
+          args: pythonArgs
+        };
+        fsSync.writeFileSync('/tmp/mcp-debug.log', JSON.stringify(debugInfo, null, 2) + '\n', { flag: 'a' });
+      } catch (e) {
+        console.error('Failed to write debug log:', e);
       }
 
-      // Build time filter
-      const timeFilter = this.buildTimeFilter(request.timeRange || '24h');
-      
-      // Enhance query with time filter if not present
-      let enhancedQuery = request.query;
-      if (!enhancedQuery.toLowerCase().includes('time >') && !enhancedQuery.toLowerCase().includes('daterelative')) {
-        enhancedQuery = `${enhancedQuery} and ${timeFilter}`;
+      if (request.limit) {
+        pythonArgs.push('--max-count', request.limit.toString());
       }
 
-      // Add limit if specified
-      if (request.limit && !enhancedQuery.toLowerCase().includes('| head')) {
-        enhancedQuery += ` | head ${request.limit}`;
-      }
+      return new Promise((resolve) => {
+        console.error('MCP DEBUG: About to spawn process with:', {
+          command: '/Users/abirzu/dev/mcp-oci-logan-server/python/venv/bin/python',
+          args: pythonArgs,
+          cwd: '/Users/abirzu/dev/mcp-oci-logan-server/python'
+        });
+        
+        const pythonProcess = spawn('/Users/abirzu/dev/mcp-oci-logan-server/python/venv/bin/python', pythonArgs, {
+          stdio: ['pipe', 'pipe', 'pipe'],
+          cwd: '/Users/abirzu/dev/mcp-oci-logan-server/python'
+        });
 
-      const queryRequest: oci.loganalytics.requests.QueryRequest = {
-        namespaceName: await this.getNamespace(),
-        queryDetails: {
-          compartmentId,
-          queryString: enhancedQuery,
-          subSystem: oci.loganalytics.models.SubSystemName.Log
-        }
-      };
+        let stdout = '';
+        let stderr = '';
 
-      const response = await this.client.query(queryRequest);
-      
-      const executionTime = Date.now() - startTime;
-      
-      return {
-        totalCount: (response as any).queryResult?.items?.length || 0,
-        data: (response as any).queryResult?.items || [],
-        executionTime,
-        queryId: (response as any).queryResult?.queryExecutionId
-      };
+        pythonProcess.stdout.on('data', (data) => {
+          stdout += data.toString();
+        });
+
+        pythonProcess.stderr.on('data', (data) => {
+          stderr += data.toString();
+        });
+
+        pythonProcess.on('close', (code) => {
+          const executionTime = Date.now() - startTime;
+
+          // Debug logging
+          try {
+            const fs = require('fs');
+            const debugResult = {
+              timestamp: new Date().toISOString(),
+              code,
+              stdout: stdout.substring(0, 500), // First 500 chars
+              stderr: stderr.substring(0, 500),
+              executionTime
+            };
+            fs.writeFileSync('/tmp/mcp-debug.log', JSON.stringify(debugResult, null, 2) + '\n', { flag: 'a' });
+          } catch (e) {
+            console.error('Failed to write debug result:', e);
+          }
+
+          if (code === 0) {
+            try {
+              const result = JSON.parse(stdout);
+              
+              if (result.success) {
+                console.error('MCP DEBUG: Python query successful:', {
+                  totalCount: result.results?.length || 0,
+                  executionTime: result.execution_time || executionTime
+                });
+
+                resolve({
+                  success: true,
+                  totalCount: result.results?.length || 0,
+                  data: result.results || [],
+                  executionTime,
+                  queryUsed: processedQuery,
+                  arePartialResults: result.are_partial_results || false
+                });
+              } else {
+                console.error('MCP DEBUG: Python client returned error:', result.error);
+                resolve({
+                  success: false,
+                  error: result.error || 'Python client returned error',
+                  totalCount: 0,
+                  data: [],
+                  executionTime,
+                  queryUsed: processedQuery
+                });
+              }
+            } catch (parseError) {
+              console.error('MCP DEBUG: Parse error:', parseError, 'Raw stdout:', stdout.substring(0, 200));
+              resolve({
+                success: false,
+                error: `Failed to parse Python response: ${parseError}`,
+                totalCount: 0,
+                data: [],
+                executionTime,
+                queryUsed: processedQuery
+              });
+            }
+          } else {
+            console.error('MCP DEBUG: Python process failed:', code, stderr);
+            resolve({
+              success: false,
+              error: `Python client failed with code ${code}: ${stderr}`,
+              totalCount: 0,
+              data: [],
+              executionTime,
+              queryUsed: processedQuery
+            });
+          }
+        });
+
+        pythonProcess.on('error', (error) => {
+          console.error('MCP DEBUG: Python process error event:', error);
+          resolve({
+            success: false,
+            error: `Failed to start Python client: ${error.message}`,
+            totalCount: 0,
+            data: [],
+            executionTime: Date.now() - startTime,
+            queryUsed: processedQuery
+          });
+        });
+
+        // Add immediate debug check
+        pythonProcess.on('spawn', () => {
+          console.error('MCP DEBUG: Python process spawned successfully');
+        });
+      });
+
     } catch (error) {
       const executionTime = Date.now() - startTime;
       console.error('Query execution failed:', error);
       
       return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error occurred',
         totalCount: 0,
         data: [],
         executionTime,
-        queryId: undefined
+        queryUsed: request.query
       };
     }
   }
 
-  private buildTimeFilter(timeRange: string): string {
-    // Convert timeRange to OCI format
-    const timeMap: { [key: string]: string } = {
-      '1h': '1h',
-      '6h': '6h',
-      '12h': '12h',
-      '24h': '24h',
-      '1d': '24h',
-      '7d': '7d',
-      '30d': '30d',
-      '1w': '7d',
-      '1m': '30d'
+  /**
+   * Check if query already has time filtering
+   */
+  private hasTimeFilter(query: string): boolean {
+    const queryLower = query.toLowerCase();
+    return queryLower.includes('time >') || 
+           queryLower.includes('daterelative') || 
+           queryLower.includes('timefilter') ||
+           queryLower.includes('datetime >');
+  }
+
+
+  /**
+   * Fix common OCI Logging Analytics query syntax issues
+   * This mirrors the _fix_query_syntax method from logan_client.py
+   */
+  private fixQuerySyntax(query: string): string {
+    let fixedQuery = query;
+
+    // Fix != null syntax to proper OCI syntax
+    fixedQuery = fixedQuery.replace(/!= null/g, '!= ""').replace(/is not null/g, '!= ""');
+    
+    // Fix Action field syntax
+    fixedQuery = fixedQuery.replace(/Action in \(drop, reject\)/g, "Action in ('drop', 'reject')");
+    
+    // Fix count(*) to count() - OCI doesn't support count(*)
+    fixedQuery = fixedQuery.replace(/stats count\(\*\)/g, "stats count");
+    
+    // Fix count(field) syntax issues
+    const countFieldPattern = /stats count\(['"]?([^')]+)['"]?\)/g;
+    if (countFieldPattern.test(fixedQuery)) {
+      // For WAF and other specific log sources, use count() without field
+      if (fixedQuery.includes('WAF') || fixedQuery.includes('Suricata')) {
+        fixedQuery = fixedQuery.replace(countFieldPattern, "stats count");
+      } else {
+        fixedQuery = fixedQuery.replace(countFieldPattern, "stats count");
+      }
+    }
+    
+    // Fix top command syntax
+    fixedQuery = fixedQuery.replace(/\| top 10 Count/g, "| sort -Count | head 10");
+    
+    // Remove problematic lookup commands (but preserve WAF lookups)
+    if (fixedQuery.includes('| lookup') && !fixedQuery.includes('WAF') && !fixedQuery.includes('Suricata')) {
+      const lookupPos = fixedQuery.indexOf('| lookup');
+      if (lookupPos > 0) {
+        fixedQuery = fixedQuery.substring(0, lookupPos).trim();
+      }
+    }
+
+    return fixedQuery;
+  }
+
+  /**
+   * Parse time range string to minutes
+   */
+  private parseTimeRange(timeRange: string): number {
+    const timeMap: { [key: string]: number } = {
+      '1h': 60,
+      '6h': 360,
+      '12h': 720,
+      '24h': 1440,
+      '1d': 1440,
+      '7d': 10080,
+      '30d': 43200,
+      '1w': 10080,
+      '1m': 43200
     };
     
-    const ociTimeRange = timeMap[timeRange] || timeRange;
-    return `Time > dateRelative(${ociTimeRange})`;
+    return timeMap[timeRange] || 1440; // Default to 24 hours
   }
 
   private async getNamespace(): Promise<string> {
@@ -263,11 +433,13 @@ export class LogAnalyticsClient {
         });
 
         return {
-          connected: true,
+          connected: testResult.success,
           authMethod,
           region: region?.regionId || 'Unknown',
           compartmentId,
-          details: `Connection successful. Test query returned ${testResult.totalCount} results in ${testResult.executionTime}ms.`
+          details: testResult.success 
+            ? `Connection successful. Test query returned ${testResult.totalCount} results in ${testResult.executionTime}ms.`
+            : `Connection failed: ${testResult.error}`
         };
       } else {
         return {
@@ -296,7 +468,10 @@ export class LogAnalyticsClient {
         timeRange: '7d'
       });
 
-      return result.data.map(item => item['Log Source']).filter(Boolean);
+      if (result.success) {
+        return result.data.map(item => item['Log Source']).filter(Boolean);
+      }
+      return [];
     } catch (error) {
       console.error('Failed to get log sources:', error);
       return [];
@@ -316,7 +491,7 @@ export class LogAnalyticsClient {
         limit: 1
       });
 
-      if (result.data.length > 0) {
+      if (result.success && result.data.length > 0) {
         return Object.keys(result.data[0]);
       }
 
