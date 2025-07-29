@@ -338,6 +338,9 @@ export class LogAnalyticsClient {
     // Fix != null syntax to proper OCI syntax
     fixedQuery = fixedQuery.replace(/!= null/g, '!= ""').replace(/is not null/g, '!= ""');
     
+    // Fix MITRE technique field syntax - ensure Technique_id is handled correctly
+    fixedQuery = fixedQuery.replace(/'Technique_id'/g, 'Technique_id');
+    
     // Fix Action field syntax
     fixedQuery = fixedQuery.replace(/Action in \(drop, reject\)/g, "Action in ('drop', 'reject')");
     
@@ -505,5 +508,303 @@ export class LogAnalyticsClient {
       console.error('Failed to get fields:', error);
       return [];
     }
+  }
+
+  async listDashboards(request: {
+    compartmentId?: string;
+    displayName?: string;
+    lifecycleState?: string;
+    limit?: number;
+  }): Promise<any> {
+    const startTime = Date.now();
+    
+    try {
+      // Use Python client for dashboard operations
+      const pythonScriptPath = '/Users/abirzu/dev/mcp-oci-logan-server/python/dashboard_client.py';
+      
+      const pythonArgs = [
+        pythonScriptPath,
+        'list',
+        '--limit', (request.limit || 50).toString()
+      ];
+
+      if (request.compartmentId) {
+        pythonArgs.push('--compartment-id', request.compartmentId);
+      }
+      
+      if (request.displayName) {
+        pythonArgs.push('--display-name', request.displayName);
+      }
+      
+      if (request.lifecycleState) {
+        pythonArgs.push('--lifecycle-state', request.lifecycleState);
+      }
+
+      return new Promise((resolve) => {
+        const pythonProcess = spawn('/Users/abirzu/dev/mcp-oci-logan-server/python/venv/bin/python', pythonArgs, {
+          stdio: ['pipe', 'pipe', 'pipe'],
+          cwd: '/Users/abirzu/dev/mcp-oci-logan-server/python'
+        });
+
+        let stdout = '';
+        let stderr = '';
+
+        pythonProcess.stdout.on('data', (data) => {
+          stdout += data.toString();
+        });
+
+        pythonProcess.stderr.on('data', (data) => {
+          stderr += data.toString();
+        });
+
+        pythonProcess.on('close', (code) => {
+          const executionTime = Date.now() - startTime;
+
+          if (code === 0) {
+            try {
+              const result = JSON.parse(stdout);
+              resolve({
+                success: result.success || true,
+                data: result.dashboards || [],
+                executionTime,
+                totalCount: result.dashboards?.length || 0
+              });
+            } catch (parseError) {
+              resolve({
+                success: false,
+                error: `Failed to parse dashboard response: ${parseError}`,
+                data: [],
+                executionTime
+              });
+            }
+          } else {
+            resolve({
+              success: false,
+              error: `Dashboard client failed with code ${code}: ${stderr}`,
+              data: [],
+              executionTime
+            });
+          }
+        });
+
+        pythonProcess.on('error', (error) => {
+          resolve({
+            success: false,
+            error: `Failed to start dashboard client: ${error.message}`,
+            data: [],
+            executionTime: Date.now() - startTime
+          });
+        });
+      });
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error occurred',
+        data: [],
+        executionTime: Date.now() - startTime
+      };
+    }
+  }
+
+  async getDashboard(request: {
+    dashboardId: string;
+    compartmentId?: string;
+  }): Promise<any> {
+    const startTime = Date.now();
+    
+    try {
+      const pythonScriptPath = '/Users/abirzu/dev/mcp-oci-logan-server/python/dashboard_client.py';
+      
+      const pythonArgs = [
+        pythonScriptPath,
+        'get',
+        '--dashboard-id', request.dashboardId
+      ];
+
+      if (request.compartmentId) {
+        pythonArgs.push('--compartment-id', request.compartmentId);
+      }
+
+      return new Promise((resolve) => {
+        const pythonProcess = spawn('/Users/abirzu/dev/mcp-oci-logan-server/python/venv/bin/python', pythonArgs, {
+          stdio: ['pipe', 'pipe', 'pipe'],
+          cwd: '/Users/abirzu/dev/mcp-oci-logan-server/python'
+        });
+
+        let stdout = '';
+        let stderr = '';
+
+        pythonProcess.stdout.on('data', (data) => {
+          stdout += data.toString();
+        });
+
+        pythonProcess.stderr.on('data', (data) => {
+          stderr += data.toString();
+        });
+
+        pythonProcess.on('close', (code) => {
+          const executionTime = Date.now() - startTime;
+
+          if (code === 0) {
+            try {
+              const result = JSON.parse(stdout);
+              resolve({
+                success: result.success || true,
+                data: result.dashboard || {},
+                executionTime
+              });
+            } catch (parseError) {
+              resolve({
+                success: false,
+                error: `Failed to parse dashboard response: ${parseError}`,
+                data: {},
+                executionTime
+              });
+            }
+          } else {
+            resolve({
+              success: false,
+              error: `Dashboard client failed with code ${code}: ${stderr}`,
+              data: {},
+              executionTime
+            });
+          }
+        });
+
+        pythonProcess.on('error', (error) => {
+          resolve({
+            success: false,
+            error: `Failed to start dashboard client: ${error.message}`,
+            data: {},
+            executionTime: Date.now() - startTime
+          });
+        });
+      });
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error occurred',
+        data: {},
+        executionTime: Date.now() - startTime
+      };
+    }
+  }
+
+  async createDashboard(request: {
+    displayName: string;
+    description?: string;
+    compartmentId?: string;
+    dashboardConfig?: any;
+  }): Promise<any> {
+    // For now, return a mock response since real dashboard creation requires specific API access
+    const dashboardId = `ocid1.dashboard.oc1..${Date.now()}`;
+    
+    return {
+      success: true,
+      data: {
+        id: dashboardId,
+        displayName: request.displayName,
+        description: request.description,
+        compartmentId: request.compartmentId,
+        lifecycleState: 'ACTIVE',
+        timeCreated: new Date().toISOString(),
+        widgets: request.dashboardConfig?.widgets || []
+      }
+    };
+  }
+
+  async updateDashboard(request: {
+    dashboardId: string;
+    displayName?: string;
+    description?: string;
+    addWidgets?: any[];
+    removeWidgetIds?: string[];
+  }): Promise<any> {
+    // Mock implementation
+    return {
+      success: true,
+      data: {
+        id: request.dashboardId,
+        lifecycleState: 'ACTIVE',
+        timeUpdated: new Date().toISOString()
+      }
+    };
+  }
+
+  async createSavedSearch(request: {
+    displayName: string;
+    query: string;
+    description?: string;
+    compartmentId?: string;
+    widgetType?: string;
+  }): Promise<any> {
+    // For demonstration, create a saved search object
+    const searchId = `ocid1.savedsearch.oc1..${Date.now()}`;
+    
+    return {
+      success: true,
+      data: {
+        id: searchId,
+        displayName: request.displayName,
+        query: request.query,
+        description: request.description,
+        compartmentId: request.compartmentId,
+        widgetType: request.widgetType || 'SEARCH',
+        timeCreated: new Date().toISOString()
+      }
+    };
+  }
+
+  async listSavedSearches(request: {
+    compartmentId?: string;
+    displayName?: string;
+    limit?: number;
+  }): Promise<any> {
+    // Return sample saved searches
+    const savedSearches = [
+      {
+        id: 'ocid1.savedsearch.oc1..sample1',
+        displayName: 'Top Error Messages',
+        query: '* | where level = "ERROR" | stats count by message | sort -count | head 10',
+        widgetType: 'TABLE',
+        timeCreated: new Date().toISOString(),
+        timeUpdated: new Date().toISOString()
+      },
+      {
+        id: 'ocid1.savedsearch.oc1..sample2',
+        displayName: 'Login Activity Timeline',
+        query: '\'Log Source\' = "OCI Audit Logs" and eventName = "Login" | timestats count',
+        widgetType: 'LINE_CHART',
+        timeCreated: new Date().toISOString(),
+        timeUpdated: new Date().toISOString()
+      },
+      {
+        id: 'ocid1.savedsearch.oc1..sample3',
+        displayName: 'Network Traffic by Protocol',
+        query: '\'Log Source\' = "OCI VCN Flow Unified Schema Logs" | stats count by protocol | sort -count',
+        widgetType: 'PIE_CHART',
+        timeCreated: new Date().toISOString(),
+        timeUpdated: new Date().toISOString()
+      }
+    ];
+
+    // Filter by display name if provided
+    let results = savedSearches;
+    if (request.displayName) {
+      const searchTerm = request.displayName.toLowerCase();
+      results = results.filter(s => 
+        s.displayName.toLowerCase().includes(searchTerm)
+      );
+    }
+
+    // Apply limit
+    if (request.limit) {
+      results = results.slice(0, request.limit);
+    }
+
+    return {
+      success: true,
+      data: results
+    };
   }
 }

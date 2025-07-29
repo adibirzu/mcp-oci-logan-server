@@ -312,8 +312,7 @@ class LoganClient:
                 # For VCN Flow logs, just use count without parentheses
                 query = re.sub(count_field_pattern, "stats count", query)
         
-        # Fix log source references to match available sources (only for known bad sources)
-        query = query.replace("'Windows Sysmon Events'", "'OCI Audit Logs'")
+        # Fix field references to match OCI schema
         query = query.replace("'Event ID'", "'Event Type'")
         
         # Fix top command syntax

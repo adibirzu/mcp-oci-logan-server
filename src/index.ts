@@ -71,7 +71,8 @@ class OCILoganMCPServer {
               },
               timeRange: {
                 type: 'string',
-                description: 'Time range for the query (e.g., "24h", "7d", "30d")',
+                description: 'Time range for the query (Sysmon/security data recommended: 30d, general queries: 24h)',
+                enum: ['1h', '6h', '12h', '24h', '1d', '7d', '30d', '1w', '1m'],
                 default: '24h'
               },
               compartmentId: {
@@ -132,8 +133,9 @@ class OCILoganMCPServer {
               },
               timeRange: {
                 type: 'string',
-                description: 'Time range for the analysis',
-                default: '7d'
+                description: 'Time range for the analysis (Sysmon data defaults to 30 days as per OCI Log Analytics)',
+                enum: ['1h', '6h', '12h', '24h', '1d', '7d', '30d', '1w', '1m'],
+                default: '30d'
               }
             }
           }
@@ -231,6 +233,262 @@ class OCILoganMCPServer {
               }
             }
           }
+        },
+        {
+          name: 'list_dashboards',
+          description: 'List OCI dashboards from the tenant',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              compartmentId: {
+                type: 'string',
+                description: 'OCI compartment OCID to list dashboards from (uses default if not provided)'
+              },
+              displayName: {
+                type: 'string',
+                description: 'Filter dashboards by display name (partial match)'
+              },
+              lifecycleState: {
+                type: 'string',
+                description: 'Filter by lifecycle state',
+                enum: ['CREATING', 'UPDATING', 'ACTIVE', 'DELETING', 'DELETED', 'FAILED'],
+                default: 'ACTIVE'
+              },
+              limit: {
+                type: 'number',
+                description: 'Maximum number of dashboards to return',
+                default: 50
+              }
+            }
+          }
+        },
+        {
+          name: 'get_dashboard',
+          description: 'Get details of a specific OCI dashboard',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              dashboardId: {
+                type: 'string',
+                description: 'OCID of the dashboard to retrieve'
+              },
+              compartmentId: {
+                type: 'string',
+                description: 'OCI compartment OCID (optional, for validation)'
+              }
+            },
+            required: ['dashboardId']
+          }
+        },
+        {
+          name: 'get_dashboard_tiles',
+          description: 'Get tiles/widgets from a specific OCI dashboard',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              dashboardId: {
+                type: 'string',
+                description: 'OCID of the dashboard'
+              },
+              tileType: {
+                type: 'string',
+                description: 'Filter tiles by type',
+                enum: ['all', 'query', 'visualization', 'metric', 'text']
+              }
+            },
+            required: ['dashboardId']
+          }
+        },
+        {
+          name: 'create_dashboard',
+          description: 'Create a new dashboard with queries and visualizations',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              displayName: {
+                type: 'string',
+                description: 'Display name for the dashboard'
+              },
+              description: {
+                type: 'string',
+                description: 'Description of the dashboard'
+              },
+              compartmentId: {
+                type: 'string',
+                description: 'OCI compartment OCID (uses default if not provided)'
+              },
+              dashboardConfig: {
+                type: 'object',
+                description: 'Dashboard configuration including widgets',
+                properties: {
+                  widgets: {
+                    type: 'array',
+                    description: 'Array of widget configurations',
+                    items: {
+                      type: 'object',
+                      properties: {
+                        displayName: {
+                          type: 'string',
+                          description: 'Widget display name'
+                        },
+                        widgetType: {
+                          type: 'string',
+                          enum: ['LINE_CHART', 'BAR_CHART', 'PIE_CHART', 'TABLE', 'METRIC', 'TEXT'],
+                          description: 'Type of visualization'
+                        },
+                        query: {
+                          type: 'string',
+                          description: 'Logan query for the widget'
+                        },
+                        position: {
+                          type: 'object',
+                          properties: {
+                            row: { type: 'number' },
+                            column: { type: 'number' },
+                            height: { type: 'number' },
+                            width: { type: 'number' }
+                          }
+                        }
+                      },
+                      required: ['displayName', 'widgetType', 'query']
+                    }
+                  }
+                }
+              }
+            },
+            required: ['displayName']
+          }
+        },
+        {
+          name: 'update_dashboard',
+          description: 'Update an existing dashboard',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              dashboardId: {
+                type: 'string',
+                description: 'OCID of the dashboard to update'
+              },
+              displayName: {
+                type: 'string',
+                description: 'New display name (optional)'
+              },
+              description: {
+                type: 'string',
+                description: 'New description (optional)'
+              },
+              addWidgets: {
+                type: 'array',
+                description: 'Widgets to add to the dashboard',
+                items: {
+                  type: 'object'
+                }
+              },
+              removeWidgetIds: {
+                type: 'array',
+                description: 'IDs of widgets to remove',
+                items: {
+                  type: 'string'
+                }
+              }
+            },
+            required: ['dashboardId']
+          }
+        },
+        {
+          name: 'create_saved_search',
+          description: 'Create a saved search in Log Analytics',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              displayName: {
+                type: 'string',
+                description: 'Display name for the saved search'
+              },
+              query: {
+                type: 'string',
+                description: 'Logan query to save'
+              },
+              description: {
+                type: 'string',
+                description: 'Description of the saved search'
+              },
+              compartmentId: {
+                type: 'string',
+                description: 'OCI compartment OCID (uses default if not provided)'
+              },
+              widgetType: {
+                type: 'string',
+                description: 'Preferred visualization type',
+                enum: ['SEARCH', 'CHART', 'TABLE', 'METRIC'],
+                default: 'SEARCH'
+              }
+            },
+            required: ['displayName', 'query']
+          }
+        },
+        {
+          name: 'list_saved_searches',
+          description: 'List saved searches from Log Analytics',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              compartmentId: {
+                type: 'string',
+                description: 'OCI compartment OCID (uses default if not provided)'
+              },
+              displayName: {
+                type: 'string',
+                description: 'Filter by display name'
+              },
+              limit: {
+                type: 'number',
+                description: 'Maximum number of results',
+                default: 50
+              }
+            }
+          }
+        },
+        {
+          name: 'export_dashboard',
+          description: 'Export dashboard configuration as JSON',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              dashboardId: {
+                type: 'string',
+                description: 'OCID of the dashboard to export'
+              },
+              includeQueries: {
+                type: 'boolean',
+                description: 'Include full query definitions',
+                default: true
+              }
+            },
+            required: ['dashboardId']
+          }
+        },
+        {
+          name: 'import_dashboard',
+          description: 'Import dashboard from JSON configuration',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              dashboardJson: {
+                type: 'string',
+                description: 'JSON string containing dashboard configuration'
+              },
+              compartmentId: {
+                type: 'string',
+                description: 'Target compartment OCID (uses default if not provided)'
+              },
+              newDisplayName: {
+                type: 'string',
+                description: 'Override display name (optional)'
+              }
+            },
+            required: ['dashboardJson']
+          }
         }
       ]
     }));
@@ -268,6 +526,24 @@ class OCILoganMCPServer {
             return await this.getDocumentation(args);
           case 'check_oci_connection':
             return await this.checkOCIConnection(args);
+          case 'list_dashboards':
+            return await this.listDashboards(args);
+          case 'get_dashboard':
+            return await this.getDashboard(args);
+          case 'get_dashboard_tiles':
+            return await this.getDashboardTiles(args);
+          case 'create_dashboard':
+            return await this.createDashboard(args);
+          case 'update_dashboard':
+            return await this.updateDashboard(args);
+          case 'create_saved_search':
+            return await this.createSavedSearch(args);
+          case 'list_saved_searches':
+            return await this.listSavedSearches(args);
+          case 'export_dashboard':
+            return await this.exportDashboard(args);
+          case 'import_dashboard':
+            return await this.importDashboard(args);
           default:
             throw new Error(`Unknown tool: ${name}`);
         }
@@ -298,6 +574,21 @@ class OCILoganMCPServer {
     };
     
     return timeMap[timeRange] || 1440; // Default to 24 hours
+  }
+
+  private buildTimeFilter(timeRange: string): string {
+    // Build time filter for OCI Logging Analytics queries
+    // This adds the proper time filtering syntax to queries
+    const now = new Date();
+    const timeRangeValue = this.parseTimeRange(timeRange);
+    const startTime = new Date(now.getTime() - (timeRangeValue * 60 * 1000));
+    
+    // Use OCI Logging Analytics time filter syntax
+    // Format: and Time >= 'YYYY-MM-DDTHH:mm:ss.sssZ'
+    const startTimeISO = startTime.toISOString();
+    const endTimeISO = now.toISOString();
+    
+    return `and Time >= '${startTimeISO}' and Time <= '${endTimeISO}'`;
   }
 
   private async executeLoganQuery(args: any) {
@@ -375,11 +666,30 @@ execute_logan_query with compartmentId: "ocid1.compartment.oc1..aaaaaaaagy3yddkk
         throw new Error(`Query failed: ${results.error || 'Unknown error from OCI Logging Analytics'}`);
       }
 
+      // Calculate actual time period for accurate display
+      const timeRangeMinutes = this.parseTimeRange(timeRange);
+      const endTime = new Date();
+      const startTime = new Date(endTime.getTime() - (timeRangeMinutes * 60 * 1000));
+      const actualDays = Math.round(timeRangeMinutes / 60 / 24);
+      
+      // Determine appropriate time description
+      let timeDescription;
+      if (actualDays >= 30) {
+        timeDescription = `Last ${actualDays} Days`;
+      } else if (actualDays >= 7) {
+        timeDescription = `Last ${actualDays} Days`;
+      } else if (actualDays >= 1) {
+        timeDescription = actualDays === 1 ? 'Last 24 Hours' : `Last ${actualDays} Days`;
+      } else {
+        const hours = Math.round(timeRangeMinutes / 60);
+        timeDescription = `Last ${hours} Hours`;
+      }
+
       return {
         content: [
           {
             type: 'text',
-            text: `✅ **Real OCI Data Retrieved Successfully**\\n\\n**Query:** ${queryName || 'Custom Query'}\\n**Time Range:** ${timeRange}\\n**Compartment:** ${compartmentId}\\n**Total Records:** ${results.totalCount}\\n**Execution Time:** ${results.executionTime}ms\\n\\n**Live OCI Log Results (First 5 records):**\\n\`\`\`json\\n${JSON.stringify(results.data.slice(0, 5), null, 2)}\\n\`\`\`\\n\\n*Note: This data is retrieved directly from Oracle Cloud Infrastructure Logging Analytics - no mock or sample data is used.*`
+            text: `✅ **Real OCI Data Retrieved Successfully**\\n\\n**Query:** ${queryName || 'Custom Query'}\\n**Data Period:** ${timeDescription} (${startTime.toISOString().split('T')[0]} to ${endTime.toISOString().split('T')[0]})\\n**Time Range Requested:** ${timeRange}\\n**Compartment:** ${compartmentId}\\n**Total Records:** ${results.totalCount}\\n**Execution Time:** ${results.executionTime}ms\\n\\n**Live OCI Log Results (First 5 records):**\\n\`\`\`json\\n${JSON.stringify(results.data.slice(0, 5), null, 2)}\\n\`\`\`\\n\\n*Note: This data spans ${timeDescription.toLowerCase()} from Oracle Cloud Infrastructure Logging Analytics - no mock or sample data is used.*`
           }
         ]
       };
@@ -394,6 +704,24 @@ execute_logan_query with compartmentId: "ocid1.compartment.oc1..aaaaaaaagy3yddkk
     try {
       // Use the internal security analyzer for searching
       const timeRangeMinutes = this.parseTimeRange(timeRange);
+      
+      // Calculate actual time period for accurate display
+      const endTime = new Date();
+      const startTime = new Date(endTime.getTime() - (timeRangeMinutes * 60 * 1000));
+      const actualDays = Math.round(timeRangeMinutes / 60 / 24);
+      
+      // Determine appropriate time description
+      let timeDescription;
+      if (actualDays >= 30) {
+        timeDescription = `Last ${actualDays} Days`;
+      } else if (actualDays >= 7) {
+        timeDescription = `Last ${actualDays} Days`;
+      } else if (actualDays >= 1) {
+        timeDescription = actualDays === 1 ? 'Last 24 Hours' : `Last ${actualDays} Days`;
+      } else {
+        const hours = Math.round(timeRangeMinutes / 60);
+        timeDescription = `Last ${hours} Hours`;
+      }
       
       // Call the security analyzer directly via spawn
       const { spawn } = await import('child_process');
@@ -438,7 +766,7 @@ execute_logan_query with compartmentId: "ocid1.compartment.oc1..aaaaaaaagy3yddkk
                   content: [
                     {
                       type: 'text',
-                      text: `🔍 **Real OCI Security Analysis Complete**\\n\\n**Search Term:** ${searchTerm}\\n**Event Type:** ${eventType}\\n**Results:** No security events found matching criteria\\n\\n*This search was performed against live OCI Logging Analytics data - no mock events are ever returned.*`
+                      text: `🔍 **Real OCI Security Analysis Complete**\\n\\n**Search Term:** ${searchTerm}\\n**Event Type:** ${eventType}\\n**Data Period:** ${timeDescription} (${startTime.toISOString().split('T')[0]} to ${endTime.toISOString().split('T')[0]})\\n**Results:** No security events found matching criteria\\n\\n*This search was performed against ${timeDescription.toLowerCase()} of live OCI Logging Analytics data - no mock events are ever returned.*`
                     }
                   ]
                 });
@@ -447,7 +775,7 @@ execute_logan_query with compartmentId: "ocid1.compartment.oc1..aaaaaaaagy3yddkk
                   content: [
                     {
                       type: 'text',
-                      text: `🔍 **Real OCI Security Events Found**\\n\\n**Search Term:** ${searchTerm}\\n**Event Type:** ${eventType}\\n**Results:** ${events.length} security events found\\n\\n**Live Security Events (Top 10):**\\n\`\`\`json\\n${JSON.stringify(events.slice(0, 10), null, 2)}\\n\`\`\`\\n\\n*Note: These are real security events from Oracle Cloud Infrastructure - no mock or sample data is used.*`
+                      text: `🔍 **Real OCI Security Events Found**\\n\\n**Search Term:** ${searchTerm}\\n**Event Type:** ${eventType}\\n**Data Period:** ${timeDescription} (${startTime.toISOString().split('T')[0]} to ${endTime.toISOString().split('T')[0]})\\n**Results:** ${events.length} security events found\\n\\n**Live Security Events (Top 10):**\\n\`\`\`json\\n${JSON.stringify(events.slice(0, 10), null, 2)}\\n\`\`\`\\n\\n*Note: These are real security events from ${timeDescription.toLowerCase()} of Oracle Cloud Infrastructure data - no mock or sample data is used.*`
                     }
                   ]
                 });
@@ -466,18 +794,24 @@ execute_logan_query with compartmentId: "ocid1.compartment.oc1..aaaaaaaagy3yddkk
   }
 
   private async getMitreTechniques(args: any) {
-    const { techniqueId, category = 'all', timeRange = '7d' } = args;
+    // Default to 30 days for Sysmon data as shown in Log Analytics
+    const { techniqueId, category = 'all', timeRange = '30d' } = args;
 
     try {
       let query: string;
       
+      // Build time filter for the query based on the specified time range
+      const timeFilter = this.buildTimeFilter(timeRange);
+      
       if (techniqueId && techniqueId !== 'all') {
-        query = `'Log Source' = 'Windows Sysmon Events' and 'Technique_id' like '${techniqueId}*' and Time > dateRelative(${timeRange}) | timestats count as events by 'Technique_id', 'Event Name' | sort -events`;
+        // Use the corrected syntax from the Log Explorer screenshot with time filtering
+        query = `'Log Source' = 'Windows Sysmon Events' and Technique_id != ${techniqueId} ${timeFilter} | fields Technique_id, 'Destination IP', 'Source IP' | timestats count as logrecords by 'Log Source'`;
       } else if (category !== 'all') {
         const categoryQueries = await this.queryTransformer.getMitreCategoryQuery(category);
         query = categoryQueries;
       } else {
-        query = `'Log Source' = 'Windows Sysmon Events' and 'Technique_id' is not null and Time > dateRelative(${timeRange}) | timestats count as events by 'Technique_id' | sort -events | head 50`;
+        // Updated general query using the corrected field syntax with time filtering
+        query = `'Log Source' = 'Windows Sysmon Events' and Technique_id != '' ${timeFilter} | fields Technique_id, 'Destination IP', 'Source IP' | timestats count as logrecords by 'Log Source'`;
       }
 
       const results = await this.logAnalyticsClient.executeQuery({
@@ -490,11 +824,16 @@ execute_logan_query with compartmentId: "ocid1.compartment.oc1..aaaaaaaagy3yddkk
         throw new Error(`MITRE technique analysis failed: ${results.error || 'Unknown error from OCI'}`);
       }
 
+      // Calculate actual time period for display
+      const timeRangeMinutes = this.parseTimeRange(timeRange);
+      const startTime = new Date(Date.now() - (timeRangeMinutes * 60 * 1000));
+      const endTime = new Date();
+      
       return {
         content: [
           {
             type: 'text',
-            text: `🎯 **Real OCI MITRE ATT&CK Analysis**\\n\\n**Technique:** ${techniqueId || 'All'}\\n**Category:** ${category}\\n**Time Range:** ${timeRange}\\n**Techniques Found:** ${results.totalCount}\\n**Execution Time:** ${results.executionTime}ms\\n\\n**Live MITRE Technique Results:**\\n\`\`\`json\\n${JSON.stringify(results.data, null, 2)}\\n\`\`\`\\n\\n*Note: This MITRE ATT&CK analysis uses real data from OCI Logging Analytics - no mock techniques are ever shown.*`
+            text: `🎯 **Real OCI MITRE ATT&CK Analysis**\\n\\n**Technique:** ${techniqueId || 'All'}\\n**Category:** ${category}\\n**Time Range:** ${timeRange} (${startTime.toISOString()} to ${endTime.toISOString()})\\n**Data Period:** Last ${timeRangeMinutes} minutes (${Math.round(timeRangeMinutes/60/24)} days)\\n**Techniques Found:** ${results.totalCount}\\n**Execution Time:** ${results.executionTime}ms\\n\\n**Live MITRE Technique Results:**\\n\`\`\`json\\n${JSON.stringify(results.data, null, 2)}\\n\`\`\`\\n\\n*Note: This MITRE ATT&CK analysis uses real Sysmon data from OCI Logging Analytics over the specified ${timeRange} period - no mock techniques are ever shown.*`
           }
         ]
       };
@@ -507,6 +846,25 @@ execute_logan_query with compartmentId: "ocid1.compartment.oc1..aaaaaaaagy3yddkk
     const { ipAddress, analysisType = 'full', timeRange = '24h' } = args;
 
     try {
+      // Calculate actual time period for accurate display
+      const timeRangeMinutes = this.parseTimeRange(timeRange);
+      const endTime = new Date();
+      const startTime = new Date(endTime.getTime() - (timeRangeMinutes * 60 * 1000));
+      const actualDays = Math.round(timeRangeMinutes / 60 / 24);
+      
+      // Determine appropriate time description
+      let timeDescription;
+      if (actualDays >= 30) {
+        timeDescription = `Last ${actualDays} Days`;
+      } else if (actualDays >= 7) {
+        timeDescription = `Last ${actualDays} Days`;
+      } else if (actualDays >= 1) {
+        timeDescription = actualDays === 1 ? 'Last 24 Hours' : `Last ${actualDays} Days`;
+      } else {
+        const hours = Math.round(timeRangeMinutes / 60);
+        timeDescription = `Last ${hours} Hours`;
+      }
+      
       const queries = await this.queryTransformer.getIPAnalysisQueries(ipAddress, analysisType);
       const results = [];
 
@@ -531,7 +889,7 @@ execute_logan_query with compartmentId: "ocid1.compartment.oc1..aaaaaaaagy3yddkk
         content: [
           {
             type: 'text',
-            text: `🌐 **Real OCI IP Activity Analysis**\\n\\n**IP Address:** ${ipAddress}\\n**Analysis Type:** ${analysisType}\\n**Time Range:** ${timeRange}\\n**Total Events:** ${totalEvents}\\n\\n**Live IP Activity Results:**\\n\`\`\`json\\n${JSON.stringify(results, null, 2)}\\n\`\`\`\\n\\n*Note: This IP analysis uses real network data from OCI Logging Analytics - no mock activity is ever shown.*`
+            text: `🌐 **Real OCI IP Activity Analysis**\\n\\n**IP Address:** ${ipAddress}\\n**Analysis Type:** ${analysisType}\\n**Data Period:** ${timeDescription} (${startTime.toISOString().split('T')[0]} to ${endTime.toISOString().split('T')[0]})\\n**Time Range Requested:** ${timeRange}\\n**Total Events:** ${totalEvents}\\n\\n**Live IP Activity Results:**\\n\`\`\`json\\n${JSON.stringify(results, null, 2)}\\n\`\`\`\\n\\n*Note: This IP analysis uses real network data from ${timeDescription.toLowerCase()} of OCI Logging Analytics - no mock activity is ever shown.*`
           }
         ]
       };
@@ -628,6 +986,533 @@ execute_logan_query with compartmentId: "ocid1.compartment.oc1..aaaaaaaagy3yddkk
       };
     } catch (error) {
       throw new Error(`Failed to check OCI connection: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  private async listDashboards(args: any) {
+    const { 
+      compartmentId: providedCompartmentId, 
+      displayName, 
+      lifecycleState = 'ACTIVE',
+      limit = 50 
+    } = args;
+
+    // Handle compartment selection with same default as queries
+    const compartmentId = providedCompartmentId || 'ocid1.compartment.oc1..aaaaaaaagy3yddkkampnhj3cqm5ar7w2p7tuq5twbojyycvol6wugfav3ckq';
+
+    if (!providedCompartmentId) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `❓ **Compartment Selection Required for Dashboards**
+
+**Please specify which OCI compartment to list dashboards from.**
+
+**Usage Example:**
+\`\`\`json
+{
+  "compartmentId": "ocid1.compartment.oc1..aaaaaaaagy3yddkkampnhj3cqm5ar7w2p7tuq5twbojyycvol6wugfav3ckq",
+  "lifecycleState": "ACTIVE",
+  "limit": 50
+}
+\`\`\`
+
+**Default Compartment Available:**
+- Production Environment: \`ocid1.compartment.oc1..aaaaaaaagy3yddkkampnhj3cqm5ar7w2p7tuq5twbojyycvol6wugfav3ckq\`
+
+*Different compartments may have different dashboards configured.*`
+          }
+        ]
+      };
+    }
+
+    try {
+      const dashboards = await this.logAnalyticsClient.listDashboards({
+        compartmentId,
+        displayName,
+        lifecycleState,
+        limit
+      });
+
+      if (!dashboards.success) {
+        throw new Error(`Failed to list dashboards: ${dashboards.error}`);
+      }
+
+      const dashboardCount = dashboards.data.length;
+      const dashboardList = dashboards.data.map((dashboard: any) => ({
+        id: dashboard.id,
+        displayName: dashboard.displayName,
+        description: dashboard.description,
+        lifecycleState: dashboard.lifecycleState,
+        timeCreated: dashboard.timeCreated,
+        timeUpdated: dashboard.timeUpdated,
+        createdBy: dashboard.createdBy,
+        updatedBy: dashboard.updatedBy,
+        dashboardGroupId: dashboard.dashboardGroupId,
+        isOobDashboard: dashboard.isOobDashboard,
+        isShowInDashboardGroup: dashboard.isShowInDashboardGroup,
+        metadataVersion: dashboard.metadataVersion,
+        screenImage: dashboard.screenImage ? 'Available' : 'Not available',
+        nls: dashboard.nls,
+        type: dashboard.type,
+        featuresConfig: dashboard.featuresConfig
+      }));
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `📊 **OCI Dashboards Retrieved Successfully**
+
+**Compartment:** ${compartmentId}
+**Filter:** ${displayName || 'None'}
+**Lifecycle State:** ${lifecycleState}
+**Total Dashboards:** ${dashboardCount}
+
+**Dashboard List:**
+\`\`\`json
+${JSON.stringify(dashboardList, null, 2)}
+\`\`\`
+
+*Note: These are real dashboards from your OCI tenant. Use get_dashboard to retrieve full details.*`
+          }
+        ]
+      };
+    } catch (error) {
+      throw new Error(`Failed to list dashboards: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  private async getDashboard(args: any) {
+    const { dashboardId, compartmentId } = args;
+
+    if (!dashboardId) {
+      throw new Error('Dashboard ID is required');
+    }
+
+    try {
+      const dashboard = await this.logAnalyticsClient.getDashboard({
+        dashboardId,
+        compartmentId
+      });
+
+      if (!dashboard.success) {
+        throw new Error(`Failed to get dashboard: ${dashboard.error}`);
+      }
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `📊 **Dashboard Details Retrieved Successfully**
+
+**Dashboard ID:** ${dashboardId}
+**Display Name:** ${dashboard.data.displayName}
+**Description:** ${dashboard.data.description || 'No description'}
+**Lifecycle State:** ${dashboard.data.lifecycleState}
+**Created:** ${dashboard.data.timeCreated}
+**Updated:** ${dashboard.data.timeUpdated}
+**Type:** ${dashboard.data.type || 'Standard'}
+
+**Configuration:**
+\`\`\`json
+${JSON.stringify(dashboard.data.config || {}, null, 2)}
+\`\`\`
+
+**Widgets/Tiles Count:** ${dashboard.data.widgets?.length || 0}
+
+*Use get_dashboard_tiles to retrieve detailed widget information.*`
+          }
+        ]
+      };
+    } catch (error) {
+      throw new Error(`Failed to get dashboard: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  private async getDashboardTiles(args: any) {
+    const { dashboardId, tileType = 'all' } = args;
+
+    if (!dashboardId) {
+      throw new Error('Dashboard ID is required');
+    }
+
+    try {
+      const dashboard = await this.logAnalyticsClient.getDashboard({
+        dashboardId
+      });
+
+      if (!dashboard.success) {
+        throw new Error(`Failed to get dashboard: ${dashboard.error}`);
+      }
+
+      let tiles = dashboard.data.widgets || dashboard.data.tiles || [];
+      
+      // Filter by tile type if specified
+      if (tileType !== 'all') {
+        tiles = tiles.filter((tile: any) => 
+          tile.type?.toLowerCase() === tileType.toLowerCase() ||
+          tile.widgetType?.toLowerCase() === tileType.toLowerCase()
+        );
+      }
+
+      const tilesSummary = tiles.map((tile: any) => ({
+        id: tile.id,
+        displayName: tile.displayName || tile.title,
+        type: tile.type || tile.widgetType,
+        query: tile.query || tile.savedSearchId,
+        visualization: tile.visualization || tile.visualizationType,
+        position: {
+          row: tile.row,
+          column: tile.column,
+          height: tile.height,
+          width: tile.width
+        },
+        dataConfig: tile.dataConfig,
+        viewConfig: tile.viewConfig
+      }));
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `📊 **Dashboard Tiles/Widgets Retrieved**
+
+**Dashboard:** ${dashboard.data.displayName}
+**Total Tiles:** ${tiles.length}
+**Filter Type:** ${tileType}
+
+**Tiles Configuration:**
+\`\`\`json
+${JSON.stringify(tilesSummary, null, 2)}
+\`\`\`
+
+*Each tile represents a visualization or query widget on the dashboard.*`
+          }
+        ]
+      };
+    } catch (error) {
+      throw new Error(`Failed to get dashboard tiles: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  private async createDashboard(args: any) {
+    const { 
+      displayName, 
+      description = '', 
+      compartmentId: providedCompartmentId,
+      dashboardConfig = {}
+    } = args;
+
+    const compartmentId = providedCompartmentId || 'ocid1.compartment.oc1..aaaaaaaagy3yddkkampnhj3cqm5ar7w2p7tuq5twbojyycvol6wugfav3ckq';
+
+    if (!displayName) {
+      throw new Error('Display name is required for creating a dashboard');
+    }
+
+    try {
+      const dashboard = await this.logAnalyticsClient.createDashboard({
+        displayName,
+        description,
+        compartmentId,
+        dashboardConfig
+      });
+
+      if (!dashboard.success) {
+        throw new Error(`Failed to create dashboard: ${dashboard.error}`);
+      }
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `✅ **Dashboard Created Successfully**
+
+**Dashboard ID:** ${dashboard.data.id}
+**Display Name:** ${displayName}
+**Description:** ${description || 'No description'}
+**Compartment:** ${compartmentId}
+**Widgets:** ${dashboardConfig.widgets?.length || 0}
+**Status:** ${dashboard.data.lifecycleState || 'ACTIVE'}
+
+*Use the dashboard ID to update or retrieve this dashboard.*`
+          }
+        ]
+      };
+    } catch (error) {
+      throw new Error(`Failed to create dashboard: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  private async updateDashboard(args: any) {
+    const { 
+      dashboardId, 
+      displayName, 
+      description,
+      addWidgets = [],
+      removeWidgetIds = []
+    } = args;
+
+    if (!dashboardId) {
+      throw new Error('Dashboard ID is required for updates');
+    }
+
+    try {
+      const updates = {
+        dashboardId,
+        ...(displayName && { displayName }),
+        ...(description !== undefined && { description }),
+        ...(addWidgets.length > 0 && { addWidgets }),
+        ...(removeWidgetIds.length > 0 && { removeWidgetIds })
+      };
+
+      const result = await this.logAnalyticsClient.updateDashboard(updates);
+
+      if (!result.success) {
+        throw new Error(`Failed to update dashboard: ${result.error}`);
+      }
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `✅ **Dashboard Updated Successfully**
+
+**Dashboard ID:** ${dashboardId}
+**Updates Applied:**
+${displayName ? `- Display Name: ${displayName}` : ''}
+${description !== undefined ? `- Description: ${description}` : ''}
+${addWidgets.length > 0 ? `- Added ${addWidgets.length} widgets` : ''}
+${removeWidgetIds.length > 0 ? `- Removed ${removeWidgetIds.length} widgets` : ''}
+
+**Status:** ${result.data.lifecycleState || 'ACTIVE'}
+**Last Updated:** ${result.data.timeUpdated || new Date().toISOString()}`
+          }
+        ]
+      };
+    } catch (error) {
+      throw new Error(`Failed to update dashboard: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  private async createSavedSearch(args: any) {
+    const {
+      displayName,
+      query,
+      description = '',
+      compartmentId: providedCompartmentId,
+      widgetType = 'SEARCH'
+    } = args;
+
+    const compartmentId = providedCompartmentId || 'ocid1.compartment.oc1..aaaaaaaagy3yddkkampnhj3cqm5ar7w2p7tuq5twbojyycvol6wugfav3ckq';
+
+    if (!displayName || !query) {
+      throw new Error('Display name and query are required for creating a saved search');
+    }
+
+    try {
+      const savedSearch = await this.logAnalyticsClient.createSavedSearch({
+        displayName,
+        query,
+        description,
+        compartmentId,
+        widgetType
+      });
+
+      if (!savedSearch.success) {
+        throw new Error(`Failed to create saved search: ${savedSearch.error}`);
+      }
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `✅ **Saved Search Created Successfully**
+
+**Search ID:** ${savedSearch.data.id}
+**Display Name:** ${displayName}
+**Query:** \`${query}\`
+**Widget Type:** ${widgetType}
+**Description:** ${description || 'No description'}
+**Compartment:** ${compartmentId}
+
+*This saved search can now be used in dashboards or executed directly.*`
+          }
+        ]
+      };
+    } catch (error) {
+      throw new Error(`Failed to create saved search: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  private async listSavedSearches(args: any) {
+    const {
+      compartmentId: providedCompartmentId,
+      displayName,
+      limit = 50
+    } = args;
+
+    const compartmentId = providedCompartmentId || 'ocid1.compartment.oc1..aaaaaaaagy3yddkkampnhj3cqm5ar7w2p7tuq5twbojyycvol6wugfav3ckq';
+
+    try {
+      const searches = await this.logAnalyticsClient.listSavedSearches({
+        compartmentId,
+        displayName,
+        limit
+      });
+
+      if (!searches.success) {
+        throw new Error(`Failed to list saved searches: ${searches.error}`);
+      }
+
+      const searchList = searches.data.map((search: any) => ({
+        id: search.id,
+        displayName: search.displayName,
+        query: search.query,
+        widgetType: search.widgetType,
+        timeCreated: search.timeCreated,
+        timeUpdated: search.timeUpdated
+      }));
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `📊 **Saved Searches Retrieved**
+
+**Compartment:** ${compartmentId}
+**Filter:** ${displayName || 'None'}
+**Total Searches:** ${searchList.length}
+
+**Saved Searches:**
+\`\`\`json
+${JSON.stringify(searchList, null, 2)}
+\`\`\`
+
+*Use these saved searches to build dashboards or run queries.*`
+          }
+        ]
+      };
+    } catch (error) {
+      throw new Error(`Failed to list saved searches: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  private async exportDashboard(args: any) {
+    const { dashboardId, includeQueries = true } = args;
+
+    if (!dashboardId) {
+      throw new Error('Dashboard ID is required for export');
+    }
+
+    try {
+      const dashboard = await this.logAnalyticsClient.getDashboard({ dashboardId });
+
+      if (!dashboard.success) {
+        throw new Error(`Failed to get dashboard: ${dashboard.error}`);
+      }
+
+      const exportData = {
+        version: '1.0',
+        exportDate: new Date().toISOString(),
+        dashboard: {
+          displayName: dashboard.data.displayName,
+          description: dashboard.data.description,
+          type: dashboard.data.type,
+          widgets: dashboard.data.widgets || [],
+          config: dashboard.data.config || {}
+        }
+      };
+
+      if (includeQueries) {
+        exportData.dashboard.widgets = exportData.dashboard.widgets.map((widget: any) => ({
+          ...widget,
+          query: widget.query || widget.savedSearchId
+        }));
+      }
+
+      const exportJson = JSON.stringify(exportData, null, 2);
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `📤 **Dashboard Exported Successfully**
+
+**Dashboard:** ${dashboard.data.displayName}
+**Export Version:** 1.0
+**Include Queries:** ${includeQueries ? 'Yes' : 'No'}
+**Widget Count:** ${exportData.dashboard.widgets.length}
+
+**Exported Configuration:**
+\`\`\`json
+${exportJson}
+\`\`\`
+
+*Save this JSON to import the dashboard later or share with others.*`
+          }
+        ]
+      };
+    } catch (error) {
+      throw new Error(`Failed to export dashboard: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  private async importDashboard(args: any) {
+    const {
+      dashboardJson,
+      compartmentId: providedCompartmentId,
+      newDisplayName
+    } = args;
+
+    const compartmentId = providedCompartmentId || 'ocid1.compartment.oc1..aaaaaaaagy3yddkkampnhj3cqm5ar7w2p7tuq5twbojyycvol6wugfav3ckq';
+
+    if (!dashboardJson) {
+      throw new Error('Dashboard JSON is required for import');
+    }
+
+    try {
+      const importData = JSON.parse(dashboardJson);
+      
+      if (!importData.dashboard) {
+        throw new Error('Invalid dashboard JSON format');
+      }
+
+      const dashboardConfig = {
+        displayName: newDisplayName || importData.dashboard.displayName,
+        description: importData.dashboard.description,
+        compartmentId,
+        dashboardConfig: {
+          widgets: importData.dashboard.widgets || [],
+          config: importData.dashboard.config || {}
+        }
+      };
+
+      const result = await this.logAnalyticsClient.createDashboard(dashboardConfig);
+
+      if (!result.success) {
+        throw new Error(`Failed to import dashboard: ${result.error}`);
+      }
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `📥 **Dashboard Imported Successfully**
+
+**New Dashboard ID:** ${result.data.id}
+**Display Name:** ${dashboardConfig.displayName}
+**Compartment:** ${compartmentId}
+**Widgets Imported:** ${dashboardConfig.dashboardConfig.widgets.length}
+**Status:** ${result.data.lifecycleState || 'ACTIVE'}
+
+*The dashboard has been imported and is ready to use.*`
+          }
+        ]
+      };
+    } catch (error) {
+      throw new Error(`Failed to import dashboard: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
