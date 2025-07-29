@@ -15,25 +15,37 @@ A Model Context Protocol (MCP) server that connects Claude to Oracle Cloud Infra
 ### 🔍 Query Execution
 - **Execute Logan Queries**: Run predefined Logan Security Dashboard queries against OCI Logging Analytics
 - **Natural Language Search**: Convert natural language to OCI query syntax
-- **MITRE ATT&CK Integration**: Search for specific MITRE techniques and tactics
-- **IP Activity Analysis**: Comprehensive analysis of IP address behavior
+- **MITRE ATT&CK Integration**: Search for specific MITRE techniques and tactics (default 30d for Sysmon data)
+- **IP Activity Analysis**: Comprehensive analysis of IP address behavior with multiple analysis types
+- **Time Correlation**: Synchronized time periods across all logs for proper correlation
 
 ### 🛡️ Security Analysis
 - **Security Event Search**: Find authentication failures, privilege escalations, network anomalies
 - **Threat Intelligence**: Analyze suspicious activities and threat patterns
 - **RITA Integration**: Network behavior analysis capabilities
-- **Real-time Monitoring**: Query live security events and logs
+- **Real-time Monitoring**: Query live security events and logs with accurate time ranges
+- **Cross-Log Correlation**: Consistent time filtering for correlating events across different log sources
+
+### 📊 Dashboard Management
+- **List Dashboards**: Browse available OCI dashboards in your tenant
+- **Dashboard Details**: Get complete dashboard configurations and widget information
+- **Create Dashboards**: Build new dashboards with custom queries and visualizations
+- **Update Dashboards**: Modify existing dashboards, add/remove widgets
+- **Export/Import**: JSON-based dashboard portability
+- **Saved Searches**: Create and manage reusable query templates
 
 ### 🔧 Developer Tools
 - **Query Validation**: Syntax validation with automatic error fixing
 - **Documentation Lookup**: Built-in help system for OCI query syntax
 - **Connection Testing**: Verify OCI authentication and connectivity
 - **Error Handling**: Comprehensive error reporting and troubleshooting
+- **Debug Logging**: Extensive debugging capabilities for troubleshooting
 
 ### 🏢 Enterprise Features
 - **Multi-tenant Support**: Query across multiple OCI environments
 - **Authentication Methods**: Support for config files, instance principals, and resource principals
-- **Performance Optimization**: Intelligent query optimization and caching
+- **Performance Optimization**: Intelligent query optimization and syntax fixing
+- **Compartment Management**: Support for multiple compartments with proper access control
 
 ## Prerequisites
 
@@ -73,33 +85,53 @@ export OCI_COMPARTMENT_ID="ocid1.compartment.oc1..xxx"
 **Option C: Instance Principal (for OCI Compute)**
 No configuration needed - automatically detected when running on OCI.
 
-### 3. Claude Desktop Configuration
+### 3. Python Environment Setup
 
-Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
+```bash
+# Setup Python virtual environment for query execution
+./setup-python.sh
+```
+
+### 4. Claude Desktop Configuration
+
+Copy the template and customize:
+```bash
+cp claude_desktop_config.json.template claude_desktop_config.json
+```
+
+Edit `claude_desktop_config.json` with your paths:
 
 ```json
 {
   "mcpServers": {
     "oci-logan": {
       "command": "node",
-      "args": ["/path/to/mcp-oci-logan-server/dist/index.js"],
+      "args": ["/Users/abirzu/dev/mcp-oci-logan-server/dist/index.js"],
       "env": {
-        "OCI_COMPARTMENT_ID": "ocid1.compartment.oc1..xxx",
-        "OCI_REGION": "us-ashburn-1"
+        "OCI_COMPARTMENT_ID": "ocid1.compartment.oc1..aaaaaaaa[your-compartment-id]",
+        "OCI_REGION": "eu-frankfurt-1"
       }
     }
   }
 }
 ```
 
-### 4. Test Installation
+Then add to `~/Library/Application Support/Claude/claude_desktop_config.json`.
+
+### 5. Test Installation
 
 ```bash
-# Test OCI connection
-npm run test
+# Test server functionality
+node test-server.js
 
-# Start the server
-npm start
+# Test OCI direct connection
+node test-oci-direct.js
+
+# Test time correlation
+node test-time-correlation.js
+
+# Test dashboard export
+node test-dashboard-export.js
 ```
 
 ## Usage Examples
@@ -107,7 +139,8 @@ npm start
 ### Basic Query Execution
 
 ```
-Execute this Logan query: 'Event Name' = 'UserLoginFailed' and Time > dateRelative(24h) | stats count by 'User Name'
+Execute this Logan query with your compartment ID:
+'Event Name' = 'UserLoginFailed' and Time > dateRelative(24h) | stats count by 'User Name'
 ```
 
 ### Natural Language Security Search
@@ -119,7 +152,7 @@ Search for failed login attempts in the last 24 hours
 ### MITRE ATT&CK Analysis
 
 ```
-Find all credential access techniques in the last week
+Find all credential access techniques in the last 30 days (default for Sysmon data)
 ```
 
 ### IP Investigation
@@ -128,74 +161,178 @@ Find all credential access techniques in the last week
 Analyze all activity for IP address 192.168.1.100 in the last 24 hours
 ```
 
+### Dashboard Management
+
+```
+List all active dashboards in your compartment
+
+Get dashboard details for ocid1.dashboard.oc1..example123
+
+Export dashboard ocid1.dashboard.oc1..example123 as JSON
+```
+
+### Saved Search Management
+
+```
+Create a saved search named "Failed Logins" with query: 'Event Name' = 'UserLoginFailed' | stats count by 'User Name'
+
+List all saved searches in my compartment
+```
+
 ### Documentation Lookup
 
 ```
 Show me the documentation for OCI query syntax
+
+Get help with MITRE technique mapping
 ```
 
 ## Available Tools
 
-### `execute_logan_query`
+### Core Query Tools
+
+#### `execute_logan_query`
 Execute OCI Logging Analytics queries with validation and error handling.
 
 **Parameters:**
 - `query` (required): OCI Logging Analytics query
-- `timeRange` (optional): Time range (24h, 7d, 30d)
-- `compartmentId` (optional): OCI compartment ID
+- `queryName` (optional): Name/identifier for the query
+- `timeRange` (optional): Time range (1h, 6h, 12h, 24h, 1d, 7d, 30d, 1w, 1m) - Default: 24h
+- `compartmentId` (optional): OCI compartment ID (required for execution)
 - `environment` (optional): Multi-tenant environment name
 
-### `search_security_events`
+#### `search_security_events`
 Search for security events using natural language.
 
 **Parameters:**
 - `searchTerm` (required): Natural language description
-- `eventType` (optional): Event type filter
-- `timeRange` (optional): Time range
-- `limit` (optional): Maximum results
+- `eventType` (optional): Event type filter (login, privilege_escalation, network_anomaly, data_exfiltration, malware, all)
+- `timeRange` (optional): Time range - Default: 24h
+- `limit` (optional): Maximum results - Default: 100
 
-### `get_mitre_techniques`
+#### `get_mitre_techniques`
 Search for MITRE ATT&CK techniques in logs.
 
 **Parameters:**
-- `techniqueId` (optional): Specific technique ID
-- `category` (optional): MITRE tactic category
-- `timeRange` (optional): Time range
+- `techniqueId` (optional): Specific technique ID (e.g., T1003, T1110) or "all"
+- `category` (optional): MITRE tactic category (initial_access, execution, persistence, etc.)
+- `timeRange` (optional): Time range - Default: 30d (recommended for Sysmon data)
 
-### `analyze_ip_activity`
+#### `analyze_ip_activity`
 Comprehensive IP address activity analysis.
 
 **Parameters:**
 - `ipAddress` (required): IP address to analyze
-- `analysisType` (optional): Type of analysis
-- `timeRange` (optional): Time range
+- `analysisType` (optional): Type of analysis (full, authentication, network, threat_intel, communication_patterns) - Default: full
+- `timeRange` (optional): Time range - Default: 24h
 
-### `get_logan_queries`
+### Dashboard Management Tools
+
+#### `list_dashboards`
+List OCI dashboards from the tenant.
+
+**Parameters:**
+- `compartmentId` (optional): OCI compartment OCID (uses default if not provided)
+- `displayName` (optional): Filter dashboards by display name (partial match)
+- `lifecycleState` (optional): Filter by lifecycle state (CREATING, UPDATING, ACTIVE, DELETING, DELETED, FAILED) - Default: ACTIVE
+- `limit` (optional): Maximum number of dashboards to return - Default: 50
+
+#### `get_dashboard`
+Get details of a specific OCI dashboard.
+
+**Parameters:**
+- `dashboardId` (required): OCID of the dashboard to retrieve
+- `compartmentId` (optional): OCI compartment OCID (for validation)
+
+#### `get_dashboard_tiles`
+Get tiles/widgets from a specific OCI dashboard.
+
+**Parameters:**
+- `dashboardId` (required): OCID of the dashboard
+- `tileType` (optional): Filter tiles by type (all, query, visualization, metric, text)
+
+#### `create_dashboard`
+Create a new dashboard with queries and visualizations.
+
+**Parameters:**
+- `displayName` (required): Display name for the dashboard
+- `description` (optional): Description of the dashboard
+- `compartmentId` (optional): OCI compartment OCID (uses default if not provided)
+- `dashboardConfig` (optional): Dashboard configuration including widgets array
+
+#### `update_dashboard`
+Update an existing dashboard.
+
+**Parameters:**
+- `dashboardId` (required): OCID of the dashboard to update
+- `displayName` (optional): New display name
+- `description` (optional): New description
+- `addWidgets` (optional): Array of widgets to add
+- `removeWidgetIds` (optional): Array of widget IDs to remove
+
+#### `export_dashboard`
+Export dashboard configuration as JSON.
+
+**Parameters:**
+- `dashboardId` (required): OCID of the dashboard to export
+- `includeQueries` (optional): Include full query definitions - Default: true
+
+#### `import_dashboard`
+Import dashboard from JSON configuration.
+
+**Parameters:**
+- `dashboardJson` (required): JSON string containing dashboard configuration
+- `compartmentId` (optional): Target compartment OCID (uses default if not provided)
+- `newDisplayName` (optional): Override display name
+
+### Saved Search Tools
+
+#### `create_saved_search`
+Create a saved search in Log Analytics.
+
+**Parameters:**
+- `displayName` (required): Display name for the saved search
+- `query` (required): Logan query to save
+- `description` (optional): Description of the saved search
+- `compartmentId` (optional): OCI compartment OCID (uses default if not provided)
+- `widgetType` (optional): Preferred visualization type (SEARCH, CHART, TABLE, METRIC) - Default: SEARCH
+
+#### `list_saved_searches`
+List saved searches from Log Analytics.
+
+**Parameters:**
+- `compartmentId` (optional): OCI compartment OCID (uses default if not provided)
+- `displayName` (optional): Filter by display name
+- `limit` (optional): Maximum number of results - Default: 50
+
+### Utility Tools
+
+#### `get_logan_queries`
 Get predefined Logan Security Dashboard queries.
 
 **Parameters:**
-- `category` (optional): Query category
+- `category` (optional): Query category (mitre-attack, security, network, authentication, privilege-escalation, all)
 - `queryName` (optional): Specific query name
 
-### `validate_query`
+#### `validate_query`
 Validate OCI query syntax with auto-fix suggestions.
 
 **Parameters:**
 - `query` (required): Query to validate
-- `fix` (optional): Attempt automatic fixes
+- `fix` (optional): Attempt automatic fixes - Default: false
 
-### `get_documentation`
+#### `get_documentation`
 Get documentation and help for OCI queries.
 
 **Parameters:**
-- `topic` (optional): Documentation topic
-- `searchTerm` (optional): Search term
+- `topic` (optional): Documentation topic (query_syntax, field_names, functions, time_filters, operators, mitre_mapping, examples, troubleshooting)
+- `searchTerm` (optional): Specific term to search for in documentation
 
-### `check_oci_connection`
+#### `check_oci_connection`
 Test OCI connection and authentication.
 
 **Parameters:**
-- `testQuery` (optional): Run test query
+- `testQuery` (optional): Run test query - Default: true
 
 ## Configuration
 
@@ -317,13 +454,28 @@ The repository is configured to exclude unnecessary files from version control:
 
 ```
 src/
-├── index.ts              # Main MCP server
+├── index.ts              # Main MCP server with all 16 tools
 ├── oci/
-│   └── LogAnalyticsClient.ts  # OCI integration
+│   └── LogAnalyticsClient.ts  # OCI integration with dashboard support
 └── utils/
-    ├── QueryValidator.ts      # Query validation
-    ├── QueryTransformer.ts    # Query transformation
+    ├── QueryValidator.ts      # Query validation and syntax fixing
+    ├── QueryTransformer.ts    # Query transformation and MITRE mapping
     └── DocumentationLookup.ts # Help system
+
+python/
+├── logan_client.py       # Python Logan client for query execution
+├── dashboard_client.py   # Dashboard management client
+├── security_analyzer.py  # Security event analysis
+├── query_mapper.py       # Query mapping utilities
+├── query_validator.py    # Python query validation
+└── requirements.txt      # Python dependencies
+
+test files:
+├── test-server.js        # Server functionality tests
+├── test-oci-direct.js    # Direct OCI connection tests
+├── test-time-correlation.js # Time correlation verification
+├── test-dashboard-export.js # Dashboard export tests
+└── test-time-update.js   # Time update tests
 ```
 
 ## Contributing
@@ -346,5 +498,21 @@ MIT License - see LICENSE file for details.
 
 ---
 
-**Version**: 1.0.0  
-**Last Updated**: January 2025
+## Recent Updates
+
+### v1.2.0 - Time Correlation Fix (July 2025)
+- ✅ **Fixed time correlation**: All queries now show accurate data periods with date ranges
+- 📊 **Enhanced dashboard management**: Added full dashboard CRUD operations
+- 🔍 **Improved saved searches**: Create and manage reusable query templates
+- 🐛 **Query syntax fixes**: Automatic OCI compatibility fixes for common syntax issues
+- 📝 **Better documentation**: Comprehensive help system with examples
+
+### Key Improvements
+- **Time Display**: Shows "Last 30 Days (2025-06-29 to 2025-07-29)" instead of generic "30d"
+- **Cross-Log Correlation**: Consistent time periods across different log sources
+- **Dashboard Tools**: 6 new dashboard management functions
+- **Python Integration**: Robust Python backend for query execution
+- **Debug Logging**: Extensive troubleshooting capabilities
+
+**Version**: 1.2.0  
+**Last Updated**: July 2025

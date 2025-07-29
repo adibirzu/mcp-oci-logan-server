@@ -2,7 +2,7 @@
   "mcpServers": {
     "oci-logan": {
       "command": "node",
-      "args": ["/path/to/mcp-oci-logan-server/dist/index.js"],
+      "args": ["/path/to/YOUR/mcp-oci-logan-server/dist/index.js"],
       "env": {
         "OCI_COMPARTMENT_ID": "your-oci-compartment-ocid-here",
         "SUPPRESS_LABEL_WARNING": "True"

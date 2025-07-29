@@ -1,11 +1,13 @@
 #!/bin/bash
 
-# MCP OCI Logan Server Setup Script
+# MCP OCI Logan Server Setup Script v1.2.0
 # This script sets up the MCP OCI Logan Server for Claude Desktop integration
+# Includes Python environment setup and dashboard management capabilities
 
 set -e
 
-echo "🚀 Setting up MCP OCI Logan Server..."
+echo "🚀 Setting up MCP OCI Logan Server v1.2.0..."
+echo "   Features: Query execution, Dashboard management, Time correlation"
 echo ""
 
 # Check if we're in the right directory
@@ -30,6 +32,18 @@ npm install
 # Build the project
 echo "🔨 Building TypeScript..."
 npm run build
+
+# Setup Python environment
+echo "🐍 Setting up Python environment..."
+if [ -f "setup-python.sh" ]; then
+    chmod +x setup-python.sh
+    ./setup-python.sh
+    echo "✅ Python environment setup complete"
+else
+    echo "⚠️  setup-python.sh not found - manual Python setup required"
+    echo "   Create virtual environment: python3 -m venv python/venv"
+    echo "   Install dependencies: pip install -r python/requirements.txt"
+fi
 
 # Check if OCI CLI is configured
 if command -v oci &> /dev/null; then
@@ -78,14 +92,20 @@ if [ -d "$CLAUDE_CONFIG_DIR" ]; then
         CURRENT_CONFIG="{}"
     fi
     
-    # Add our MCP server configuration
-    NEW_CONFIG=$(echo "$CURRENT_CONFIG" | jq --arg path "$(pwd)/dist/index.js" '
+    # Add our MCP server configuration with environment variables
+    # Read from .env file if it exists
+    if [ -f ".env" ]; then
+        source .env
+    fi
+    
+    NEW_CONFIG=$(echo "$CURRENT_CONFIG" | jq --arg path "$(pwd)/dist/index.js" --arg compartment "${OCI_COMPARTMENT_ID:-}" --arg region "${OCI_REGION:-us-ashburn-1}" '
         .mcpServers = (.mcpServers // {}) | 
         .["oci-logan"] = {
             "command": "node",
             "args": [$path],
             "env": {
-                "OCI_REGION": "us-ashburn-1"
+                "OCI_REGION": $region,
+                "OCI_COMPARTMENT_ID": $compartment
             }
         }
     ')
@@ -99,28 +119,61 @@ else
     echo "   Manual config file location: $CLAUDE_CONFIG_DIR/claude_desktop_config.json"
 fi
 
-# Test the server
+# Test the server with multiple test suites
 echo ""
-echo "🧪 Testing server..."
-npm run test
+echo "🧪 Testing server functionality..."
+if [ -f "test-server.js" ]; then
+    node test-server.js
+else
+    echo "⚠️  test-server.js not found - manual testing required"
+fi
+
+echo "🧪 Testing OCI connection..."
+if [ -f "test-oci-direct.js" ]; then
+    node test-oci-direct.js || echo "⚠️  OCI connection test failed - check authentication"
+else
+    echo "⚠️  test-oci-direct.js not found"
+fi
+
+echo "🧪 Testing time correlation..."
+if [ -f "test-time-correlation.js" ]; then
+    node test-time-correlation.js || echo "⚠️  Time correlation test failed"
+else
+    echo "⚠️  test-time-correlation.js not found"
+fi
 
 echo ""
 echo "🎉 Setup complete!"
 echo ""
 echo "📋 Next steps:"
-echo "1. Configure OCI authentication:"
+echo "1. Configure OCI authentication (if not already done):"
 echo "   - Option A: Run 'oci setup config'"
 echo "   - Option B: Set environment variables (OCI_USER_ID, OCI_TENANCY_ID, etc.)"
 echo "   - Option C: Use Instance Principal (automatic on OCI Compute)"
 echo ""
 echo "2. Set your OCI compartment ID:"
-echo "   export OCI_COMPARTMENT_ID='ocid1.compartment.oc1..your-compartment-id'"
+echo "   Option A: Create .env file with OCI_COMPARTMENT_ID=your-compartment-id"
+echo "   Option B: Export environment variable: export OCI_COMPARTMENT_ID=your-compartment-id"
+echo "   Current: ${OCI_COMPARTMENT_ID:-'Not Set - Please configure!'}"
+echo "   Config file: $CONFIG_FILE"
 echo ""
 echo "3. Restart Claude Desktop to load the new configuration"
 echo ""
-echo "4. Test the integration:"
-echo "   'Check OCI connection and show available tools'"
+echo "4. Test the integration with these commands:"
+echo "   'Check OCI connection status'"
+echo "   'List dashboards in my compartment' "
+echo "   'Execute a simple Logan query'"
 echo ""
-echo "📚 Documentation: README.md"
+echo "🆕 New v1.2.0 Features Available:"
+echo "   • Dashboard management (16 tools total)"
+echo "   • Time correlation across logs"
+echo "   • Saved search management"
+echo "   • Enhanced MITRE ATT&CK analysis"
+echo ""
+echo "📚 Documentation:"
+echo "   • README.md - Overview and setup"
+echo "   • USER_GUIDE.md - Comprehensive usage guide"
+echo "   • TIME-CORRELATION-FIX.md - Time correlation details"
 echo "🔧 Configuration: $CONFIG_FILE"
+echo "🐍 Python Environment: python/venv/"
 echo ""
