@@ -163,6 +163,11 @@ export class LogAnalyticsClient {
         '--time-period', timeRangeMinutes.toString()
       ];
 
+      // Add compartment ID if provided
+      if (request.compartmentId) {
+        pythonArgs.push('--compartment-id', request.compartmentId);
+      }
+
       console.error('MCP DEBUG: Executing query via Python client:', processedQuery);
       console.error('MCP DEBUG: Time range:', timeRangeMinutes, 'minutes');
       

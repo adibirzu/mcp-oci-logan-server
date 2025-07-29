@@ -282,24 +282,60 @@ class OCILoganMCPServer {
         return timeMap[timeRange] || 1440; // Default to 24 hours
     }
     async executeLoganQuery(args) {
-        const { query, queryName, timeRange = '24h', compartmentId, environment } = args;
+        const { query, queryName, timeRange = '24h', compartmentId: providedCompartmentId, environment } = args;
         // Debug logging
-        console.error('MCP DEBUG: executeLoganQuery called with:', { query, timeRange });
+        console.error('MCP DEBUG: executeLoganQuery called with:', { query, timeRange, providedCompartmentId });
         // Write to debug file immediately
         try {
             const fs = require('fs');
             fs.writeFileSync('/tmp/mcp-execute-debug.log', JSON.stringify({
                 timestamp: new Date().toISOString(),
                 method: 'executeLoganQuery',
-                args: { query, queryName, timeRange, compartmentId, environment }
+                args: { query, queryName, timeRange, compartmentId: providedCompartmentId, environment }
             }, null, 2) + '\n', { flag: 'a' });
         }
         catch (e) {
             console.error('Failed to write execute debug log:', e);
         }
+        // Handle compartment selection
+        const compartmentId = providedCompartmentId || 'ocid1.compartment.oc1..aaaaaaaagy3yddkkampnhj3cqm5ar7w2p7tuq5twbojyycvol6wugfav3ckq';
+        if (!providedCompartmentId) {
+            return {
+                content: [
+                    {
+                        type: 'text',
+                        text: `❓ **Compartment Selection Required**
+
+**Current Query:** ${query}
+**Time Range:** ${timeRange}
+
+**Please specify which OCI compartment to query against.**
+
+**Usage Example:**
+\`\`\`json
+{
+  "query": "${query}",
+  "queryName": "${queryName || 'Custom Query'}",
+  "timeRange": "${timeRange}",
+  "compartmentId": "ocid1.compartment.oc1..aaaaaaaagy3yddkkampnhj3cqm5ar7w2p7tuq5twbojyycvol6wugfav3ckq"
+}
+\`\`\`
+
+**Default Compartment Available:**
+- Production Environment: \`ocid1.compartment.oc1..aaaaaaaagy3yddkkampnhj3cqm5ar7w2p7tuq5twbojyycvol6wugfav3ckq\`
+
+**To execute with default compartment, run:**
+execute_logan_query with compartmentId: "ocid1.compartment.oc1..aaaaaaaagy3yddkkampnhj3cqm5ar7w2p7tuq5twbojyycvol6wugfav3ckq"
+
+*Different compartments may contain different log sources and data volumes.*`
+                    }
+                ]
+            };
+        }
         try {
             // Skip validation for debugging
             console.error('MCP DEBUG: Skipping validation for debugging...');
+            console.error('MCP DEBUG: Using compartment:', compartmentId);
             // Execute query
             console.error('MCP DEBUG: About to call executeQuery on logAnalyticsClient');
             const results = await this.logAnalyticsClient.executeQuery({
@@ -317,7 +353,7 @@ class OCILoganMCPServer {
                 content: [
                     {
                         type: 'text',
-                        text: `✅ **Real OCI Data Retrieved Successfully**\\n\\n**Query:** ${queryName || 'Custom Query'}\\n**Time Range:** ${timeRange}\\n**Total Records:** ${results.totalCount}\\n**Execution Time:** ${results.executionTime}ms\\n\\n**Live OCI Log Results (First 5 records):**\\n\`\`\`json\\n${JSON.stringify(results.data.slice(0, 5), null, 2)}\\n\`\`\`\\n\\n*Note: This data is retrieved directly from Oracle Cloud Infrastructure Logging Analytics - no mock or sample data is used.*`
+                        text: `✅ **Real OCI Data Retrieved Successfully**\\n\\n**Query:** ${queryName || 'Custom Query'}\\n**Time Range:** ${timeRange}\\n**Compartment:** ${compartmentId}\\n**Total Records:** ${results.totalCount}\\n**Execution Time:** ${results.executionTime}ms\\n\\n**Live OCI Log Results (First 5 records):**\\n\`\`\`json\\n${JSON.stringify(results.data.slice(0, 5), null, 2)}\\n\`\`\`\\n\\n*Note: This data is retrieved directly from Oracle Cloud Infrastructure Logging Analytics - no mock or sample data is used.*`
                     }
                 ]
             };

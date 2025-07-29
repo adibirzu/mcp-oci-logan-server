@@ -12,15 +12,17 @@ from datetime import datetime, timedelta, timezone
 import argparse
 
 class LoganClient:
-    def __init__(self):
+    def __init__(self, compartment_id=None):
         self.config = self._load_oci_config()
         
         # Prioritize environment variables passed from the calling process
         self.region = os.getenv('LOGAN_REGION') or self.config.get("region", "us-ashburn-1")
-        self.compartment_id = os.getenv('LOGAN_COMPARTMENT_ID') or self.config.get("tenancy")
+        
+        # Use provided compartment_id, then environment variable, then config tenancy
+        self.compartment_id = compartment_id or os.getenv('LOGAN_COMPARTMENT_ID') or self.config.get("tenancy")
 
         if not self.compartment_id:
-            raise Exception("LOGAN_COMPARTMENT_ID environment variable or OCI config 'tenancy' is not set.")
+            raise Exception("Compartment ID must be provided via parameter, LOGAN_COMPARTMENT_ID environment variable, or OCI config 'tenancy'.")
 
         # Set the region for the client
         self.config["region"] = self.region
@@ -510,11 +512,12 @@ def main():
     parser.add_argument('--query', help='Query string for search')
     parser.add_argument('--time-period', type=int, default=1440, help='Time period in minutes')
     parser.add_argument('--max-count', type=int, default=100, help='Maximum results count')
+    parser.add_argument('--compartment-id', help='OCI Compartment OCID to query against')
     
     args = parser.parse_args()
     
     try:
-        client = LoganClient()
+        client = LoganClient(compartment_id=args.compartment_id)
         
         if args.action == 'test':
             result = client.test_connection()
