@@ -1,5 +1,6 @@
 import * as oci from 'oci-sdk';
 import { promises as fs } from 'fs';
+import fsSync from 'fs';
 import { homedir } from 'os';
 import path from 'path';
 import { spawn } from 'child_process';
@@ -130,7 +131,6 @@ export class LogAnalyticsClient {
             console.error('MCP DEBUG: Time range:', timeRangeMinutes, 'minutes');
             // Also write to a debug file for troubleshooting
             try {
-                const fsSync = require('fs');
                 const debugInfo = {
                     timestamp: new Date().toISOString(),
                     query: processedQuery,
@@ -167,7 +167,6 @@ export class LogAnalyticsClient {
                     const executionTime = Date.now() - startTime;
                     // Debug logging
                     try {
-                        const fs = require('fs');
                         const debugResult = {
                             timestamp: new Date().toISOString(),
                             code,
@@ -175,7 +174,7 @@ export class LogAnalyticsClient {
                             stderr: stderr.substring(0, 500),
                             executionTime
                         };
-                        fs.writeFileSync('/tmp/mcp-debug.log', JSON.stringify(debugResult, null, 2) + '\n', { flag: 'a' });
+                        fsSync.writeFileSync('/tmp/mcp-debug.log', JSON.stringify(debugResult, null, 2) + '\n', { flag: 'a' });
                     }
                     catch (e) {
                         console.error('Failed to write debug result:', e);

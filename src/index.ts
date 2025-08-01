@@ -8,9 +8,9 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import { LogAnalyticsClient } from './oci/LogAnalyticsClient.js';
 import { QueryValidator } from './utils/QueryValidator.js';
+import fs from 'fs';
 import { QueryTransformer } from './utils/QueryTransformer.js';
 import { DocumentationLookup } from './utils/DocumentationLookup.js';
-import { promises as fs } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -503,7 +503,6 @@ class OCILoganMCPServer {
 
       // Global debug logging for all tool calls
       try {
-        const fs = require('fs');
         fs.writeFileSync('/tmp/mcp-tool-debug.log', JSON.stringify({ 
           timestamp: new Date().toISOString(),
           toolName: name,
@@ -604,7 +603,6 @@ class OCILoganMCPServer {
     
     // Write to debug file immediately
     try {
-      const fs = require('fs');
       fs.writeFileSync('/tmp/mcp-execute-debug.log', JSON.stringify({ 
         timestamp: new Date().toISOString(),
         method: 'executeLoganQuery',

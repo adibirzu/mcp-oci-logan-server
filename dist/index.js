@@ -4,12 +4,17 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { CallToolRequestSchema, ListToolsRequestSchema, } from '@modelcontextprotocol/sdk/types.js';
 import { LogAnalyticsClient } from './oci/LogAnalyticsClient.js';
 import { QueryValidator } from './utils/QueryValidator.js';
+import fs from 'fs';
 import { QueryTransformer } from './utils/QueryTransformer.js';
 import { DocumentationLookup } from './utils/DocumentationLookup.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+// Configuration constants
+const DEFAULT_COMPARTMENT_ID = process.env.OCI_COMPARTMENT_ID;
+const DEFAULT_REGION = process.env.OCI_REGION || 'us-ashburn-1';
+const EXAMPLE_COMPARTMENT_ID = 'ocid1.compartment.oc1..aaaaaaaa[your-compartment-id]';
 class OCILoganMCPServer {
     server;
     logAnalyticsClient;
@@ -481,7 +486,6 @@ class OCILoganMCPServer {
             const { name, arguments: args } = request.params;
             // Global debug logging for all tool calls
             try {
-                const fs = require('fs');
                 fs.writeFileSync('/tmp/mcp-tool-debug.log', JSON.stringify({
                     timestamp: new Date().toISOString(),
                     toolName: name,
@@ -575,7 +579,6 @@ class OCILoganMCPServer {
         console.error('MCP DEBUG: executeLoganQuery called with:', { query, timeRange, providedCompartmentId });
         // Write to debug file immediately
         try {
-            const fs = require('fs');
             fs.writeFileSync('/tmp/mcp-execute-debug.log', JSON.stringify({
                 timestamp: new Date().toISOString(),
                 method: 'executeLoganQuery',
@@ -586,7 +589,7 @@ class OCILoganMCPServer {
             console.error('Failed to write execute debug log:', e);
         }
         // Handle compartment selection
-        const compartmentId = providedCompartmentId || 'ocid1.compartment.oc1..aaaaaaaagy3yddkkampnhj3cqm5ar7w2p7tuq5twbojyycvol6wugfav3ckq';
+        const compartmentId = providedCompartmentId || DEFAULT_COMPARTMENT_ID;
         if (!providedCompartmentId) {
             return {
                 content: [
@@ -605,15 +608,15 @@ class OCILoganMCPServer {
   "query": "${query}",
   "queryName": "${queryName || 'Custom Query'}",
   "timeRange": "${timeRange}",
-  "compartmentId": "ocid1.compartment.oc1..aaaaaaaagy3yddkkampnhj3cqm5ar7w2p7tuq5twbojyycvol6wugfav3ckq"
+  "compartmentId": "${EXAMPLE_COMPARTMENT_ID}"
 }
 \`\`\`
 
 **Default Compartment Available:**
-- Production Environment: \`ocid1.compartment.oc1..aaaaaaaagy3yddkkampnhj3cqm5ar7w2p7tuq5twbojyycvol6wugfav3ckq\`
+- Production Environment: \`${EXAMPLE_COMPARTMENT_ID}\`
 
 **To execute with default compartment, run:**
-execute_logan_query with compartmentId: "ocid1.compartment.oc1..aaaaaaaagy3yddkkampnhj3cqm5ar7w2p7tuq5twbojyycvol6wugfav3ckq"
+execute_logan_query with compartmentId: "${EXAMPLE_COMPARTMENT_ID}"
 
 *Different compartments may contain different log sources and data volumes.*`
                     }
@@ -939,7 +942,7 @@ execute_logan_query with compartmentId: "ocid1.compartment.oc1..aaaaaaaagy3yddkk
     async listDashboards(args) {
         const { compartmentId: providedCompartmentId, displayName, lifecycleState = 'ACTIVE', limit = 50 } = args;
         // Handle compartment selection with same default as queries
-        const compartmentId = providedCompartmentId || 'ocid1.compartment.oc1..aaaaaaaagy3yddkkampnhj3cqm5ar7w2p7tuq5twbojyycvol6wugfav3ckq';
+        const compartmentId = providedCompartmentId || '${EXAMPLE_COMPARTMENT_ID}';
         if (!providedCompartmentId) {
             return {
                 content: [
@@ -952,14 +955,14 @@ execute_logan_query with compartmentId: "ocid1.compartment.oc1..aaaaaaaagy3yddkk
 **Usage Example:**
 \`\`\`json
 {
-  "compartmentId": "ocid1.compartment.oc1..aaaaaaaagy3yddkkampnhj3cqm5ar7w2p7tuq5twbojyycvol6wugfav3ckq",
+  "compartmentId": "${EXAMPLE_COMPARTMENT_ID}",
   "lifecycleState": "ACTIVE",
   "limit": 50
 }
 \`\`\`
 
 **Default Compartment Available:**
-- Production Environment: \`ocid1.compartment.oc1..aaaaaaaagy3yddkkampnhj3cqm5ar7w2p7tuq5twbojyycvol6wugfav3ckq\`
+- Production Environment: \`${EXAMPLE_COMPARTMENT_ID}\`
 
 *Different compartments may have different dashboards configured.*`
                     }
@@ -1122,7 +1125,7 @@ ${JSON.stringify(tilesSummary, null, 2)}
     }
     async createDashboard(args) {
         const { displayName, description = '', compartmentId: providedCompartmentId, dashboardConfig = {} } = args;
-        const compartmentId = providedCompartmentId || 'ocid1.compartment.oc1..aaaaaaaagy3yddkkampnhj3cqm5ar7w2p7tuq5twbojyycvol6wugfav3ckq';
+        const compartmentId = providedCompartmentId || '${EXAMPLE_COMPARTMENT_ID}';
         if (!displayName) {
             throw new Error('Display name is required for creating a dashboard');
         }
@@ -1200,7 +1203,7 @@ ${removeWidgetIds.length > 0 ? `- Removed ${removeWidgetIds.length} widgets` : '
     }
     async createSavedSearch(args) {
         const { displayName, query, description = '', compartmentId: providedCompartmentId, widgetType = 'SEARCH' } = args;
-        const compartmentId = providedCompartmentId || 'ocid1.compartment.oc1..aaaaaaaagy3yddkkampnhj3cqm5ar7w2p7tuq5twbojyycvol6wugfav3ckq';
+        const compartmentId = providedCompartmentId || '${EXAMPLE_COMPARTMENT_ID}';
         if (!displayName || !query) {
             throw new Error('Display name and query are required for creating a saved search');
         }
@@ -1239,7 +1242,7 @@ ${removeWidgetIds.length > 0 ? `- Removed ${removeWidgetIds.length} widgets` : '
     }
     async listSavedSearches(args) {
         const { compartmentId: providedCompartmentId, displayName, limit = 50 } = args;
-        const compartmentId = providedCompartmentId || 'ocid1.compartment.oc1..aaaaaaaagy3yddkkampnhj3cqm5ar7w2p7tuq5twbojyycvol6wugfav3ckq';
+        const compartmentId = providedCompartmentId || '${EXAMPLE_COMPARTMENT_ID}';
         try {
             const searches = await this.logAnalyticsClient.listSavedSearches({
                 compartmentId,
@@ -1336,7 +1339,7 @@ ${exportJson}
     }
     async importDashboard(args) {
         const { dashboardJson, compartmentId: providedCompartmentId, newDisplayName } = args;
-        const compartmentId = providedCompartmentId || 'ocid1.compartment.oc1..aaaaaaaagy3yddkkampnhj3cqm5ar7w2p7tuq5twbojyycvol6wugfav3ckq';
+        const compartmentId = providedCompartmentId || '${EXAMPLE_COMPARTMENT_ID}';
         if (!dashboardJson) {
             throw new Error('Dashboard JSON is required for import');
         }
