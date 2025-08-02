@@ -62,13 +62,13 @@ class OCILoganMCPServer {
       tools: [
         {
           name: 'execute_logan_query',
-          description: 'Execute a Logan Security Dashboard query against OCI Logging Analytics',
+          description: 'Execute a Logan Security Dashboard query against OCI Logging Analytics with enhanced query language support',
           inputSchema: {
             type: 'object',
             properties: {
               query: {
                 type: 'string',
-                description: 'OCI Logging Analytics query in OCI format'
+                description: 'OCI Logging Analytics query using pipe-delimited commands (e.g., "Severity = \'error\' | stats count by \'Host Name\'")'
               },
               queryName: {
                 type: 'string',
@@ -77,7 +77,7 @@ class OCILoganMCPServer {
               timeRange: {
                 type: 'string',
                 description: 'Time range for the query (Sysmon/security data recommended: 30d, general queries: 24h)',
-                enum: ['1h', '6h', '12h', '24h', '1d', '7d', '30d', '1w', '1m'],
+                enum: ['1h', '6h', '12h', '24h', '1d', '7d', '30d', '1w', '1m', '90d'],
                 default: '24h'
               },
               compartmentId: {
@@ -87,6 +87,11 @@ class OCILoganMCPServer {
               environment: {
                 type: 'string',
                 description: 'Environment name for multi-tenant queries (optional)'
+              },
+              timeFilter: {
+                type: 'string',
+                description: 'Custom time filter using dateRelative() or toDate() functions (overrides timeRange if provided)',
+                examples: ['dateRelative(7day)', 'toDate(\'2024-01-01T00:00:00Z\')']
               }
             },
             required: ['query']
@@ -179,7 +184,7 @@ class OCILoganMCPServer {
               category: {
                 type: 'string',
                 description: 'Query category',
-                enum: ['mitre-attack', 'security', 'network', 'authentication', 'privilege-escalation', 'all']
+                enum: ['mitre-attack', 'security', 'network', 'authentication', 'privilege-escalation', 'advanced_analytics', 'statistical_analysis', 'compliance_monitoring', 'all']
               },
               queryName: {
                 type: 'string',
@@ -494,6 +499,321 @@ class OCILoganMCPServer {
             },
             required: ['dashboardJson']
           }
+        },
+        {
+          name: 'execute_advanced_analytics',
+          description: 'Execute advanced analytics queries using OCI Log Analytics specialized commands',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              analyticsType: {
+                type: 'string',
+                description: 'Type of advanced analytics to perform',
+                enum: ['cluster', 'link', 'nlp', 'classify', 'outlier', 'sequence', 'geostats', 'timecluster']
+              },
+              baseQuery: {
+                type: 'string',
+                description: 'Base query to analyze (without analytics command)'
+              },
+              parameters: {
+                type: 'object',
+                description: 'Parameters specific to the analytics type',
+                properties: {
+                  groupBy: {
+                    type: 'array',
+                    items: { type: 'string' },
+                    description: 'Fields to group by for clustering/linking'
+                  },
+                  threshold: {
+                    type: 'number',
+                    description: 'Threshold value for outlier detection'
+                  },
+                  maxClusters: {
+                    type: 'number',
+                    description: 'Maximum number of clusters to generate'
+                  },
+                  sequencePattern: {
+                    type: 'string',
+                    description: 'Pattern for sequence analysis'
+                  },
+                  geoFields: {
+                    type: 'object',
+                    properties: {
+                      latitude: { type: 'string' },
+                      longitude: { type: 'string' }
+                    },
+                    description: 'Geographic coordinate fields for geostats'
+                  }
+                }
+              },
+              timeRange: {
+                type: 'string',
+                description: 'Time range for analysis',
+                enum: ['1h', '6h', '12h', '24h', '1d', '7d', '30d', '1w', '1m', '90d'],
+                default: '24h'
+              },
+              compartmentId: {
+                type: 'string',
+                description: 'OCI compartment ID (optional)'
+              }
+            },
+            required: ['analyticsType', 'baseQuery']
+          }
+        },
+        {
+          name: 'execute_statistical_analysis',
+          description: 'Execute statistical analysis using stats, timestats, and eventstats commands',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              statisticsType: {
+                type: 'string',
+                description: 'Type of statistical analysis',
+                enum: ['stats', 'timestats', 'eventstats', 'top', 'bottom', 'frequent', 'rare']
+              },
+              baseQuery: {
+                type: 'string',
+                description: 'Base query to analyze statistically'
+              },
+              aggregations: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    function: {
+                      type: 'string',
+                      enum: ['count', 'sum', 'avg', 'min', 'max', 'stdev', 'var', 'distinct_count']
+                    },
+                    field: {
+                      type: 'string',
+                      description: 'Field to aggregate (optional for count)'
+                    },
+                    alias: {
+                      type: 'string',
+                      description: 'Alias for the result field'
+                    }
+                  },
+                  required: ['function']
+                },
+                description: 'Statistical functions to apply'
+              },
+              groupBy: {
+                type: 'array',
+                items: { type: 'string' },
+                description: 'Fields to group by'
+              },
+              timeInterval: {
+                type: 'string',
+                description: 'Time interval for timestats (e.g., "5m", "1h", "1d")',
+                examples: ['1m', '5m', '15m', '1h', '6h', '1d']
+              },
+              limit: {
+                type: 'number',
+                description: 'Maximum number of results for top/bottom/frequent/rare',
+                default: 10
+              },
+              timeRange: {
+                type: 'string',
+                description: 'Time range for analysis',
+                enum: ['1h', '6h', '12h', '24h', '1d', '7d', '30d', '1w', '1m', '90d'],
+                default: '24h'
+              },
+              compartmentId: {
+                type: 'string',
+                description: 'OCI compartment ID (optional)'
+              }
+            },
+            required: ['statisticsType', 'baseQuery', 'aggregations']
+          }
+        },
+        {
+          name: 'execute_field_operations',
+          description: 'Execute field manipulation and transformation operations',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              operation: {
+                type: 'string',
+                description: 'Type of field operation',
+                enum: ['extract', 'eval', 'addfields', 'rename', 'fields', 'dedup', 'bucket']
+              },
+              baseQuery: {
+                type: 'string',
+                description: 'Base query to apply field operations to'
+              },
+              operationDetails: {
+                type: 'object',
+                description: 'Details specific to the operation type',
+                properties: {
+                  extractPattern: {
+                    type: 'string',
+                    description: 'Regex pattern for extract operation'
+                  },
+                  evalExpression: {
+                    type: 'string',
+                    description: 'Expression for eval operation (e.g., "newField = field1 + field2")'
+                  },
+                  fieldList: {
+                    type: 'array',
+                    items: { type: 'string' },
+                    description: 'List of fields for fields/dedup operations'
+                  },
+                  renameMapping: {
+                    type: 'object',
+                    description: 'Field rename mappings (oldName -> newName)'
+                  },
+                  bucketField: {
+                    type: 'string',
+                    description: 'Field to bucket for bucket operation'
+                  },
+                  bucketRanges: {
+                    type: 'array',
+                    items: { type: 'number' },
+                    description: 'Bucket range values'
+                  },
+                  includeFields: {
+                    type: 'boolean',
+                    description: 'Include (true) or exclude (false) specified fields',
+                    default: true
+                  }
+                }
+              },
+              timeRange: {
+                type: 'string',
+                description: 'Time range for operation',
+                enum: ['1h', '6h', '12h', '24h', '1d', '7d', '30d', '1w', '1m', '90d'],
+                default: '24h'
+              },
+              compartmentId: {
+                type: 'string',
+                description: 'OCI compartment ID (optional)'
+              }
+            },
+            required: ['operation', 'baseQuery', 'operationDetails']
+          }
+        },
+        {
+          name: 'search_log_patterns',
+          description: 'Search for specific log patterns using advanced filtering and regex capabilities',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              logSource: {
+                type: 'string',
+                description: 'Specific log source to search in (e.g., "Windows Sysmon Events", "OCI Audit Logs")'
+              },
+              pattern: {
+                type: 'string',
+                description: 'Search pattern or regex to find'
+              },
+              patternType: {
+                type: 'string',
+                description: 'Type of pattern search',
+                enum: ['wildcard', 'regex', 'exact', 'contains']
+              },
+              fields: {
+                type: 'array',
+                items: { type: 'string' },
+                description: 'Specific fields to search within'
+              },
+              filterCriteria: {
+                type: 'object',
+                description: 'Additional filter criteria',
+                properties: {
+                  severity: {
+                    type: 'array',
+                    items: { 
+                      type: 'string',
+                      enum: ['fatal', 'error', 'warning', 'info', 'debug', 'trace']
+                    },
+                    description: 'Log severity levels to include'
+                  },
+                  hostNames: {
+                    type: 'array',
+                    items: { type: 'string' },
+                    description: 'Specific hosts to search'
+                  },
+                  ipAddresses: {
+                    type: 'array',
+                    items: { type: 'string' },
+                    description: 'IP addresses to filter by'
+                  },
+                  excludePatterns: {
+                    type: 'array',
+                    items: { type: 'string' },
+                    description: 'Patterns to exclude from results'
+                  }
+                }
+              },
+              timeRange: {
+                type: 'string',
+                description: 'Time range for search',
+                enum: ['1h', '6h', '12h', '24h', '1d', '7d', '30d', '1w', '1m', '90d'],
+                default: '24h'
+              },
+              maxResults: {
+                type: 'number',
+                description: 'Maximum number of results to return',
+                default: 100
+              },
+              compartmentId: {
+                type: 'string',
+                description: 'OCI compartment ID (optional)'
+              }
+            },
+            required: ['pattern']
+          }
+        },
+        {
+          name: 'correlation_analysis',
+          description: 'Perform log correlation analysis to find related events across different log sources',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              correlationType: {
+                type: 'string',
+                description: 'Type of correlation analysis',
+                enum: ['temporal', 'entity_based', 'transaction_link', 'sequence_analysis']
+              },
+              primaryQuery: {
+                type: 'string',
+                description: 'Primary query to correlate from'
+              },
+              correlationFields: {
+                type: 'array',
+                items: { type: 'string' },
+                description: 'Fields to use for correlation (e.g., user_id, ip_address, session_id)'
+              },
+              timeWindow: {
+                type: 'string',
+                description: 'Time window for correlation (e.g., "5m", "1h")',
+                examples: ['30s', '1m', '5m', '15m', '1h', '2h']
+              },
+              secondaryLogSources: {
+                type: 'array',
+                items: { type: 'string' },
+                description: 'Additional log sources to correlate with'
+              },
+              threshold: {
+                type: 'number',
+                description: 'Minimum correlation score threshold (0.0-1.0)',
+                minimum: 0.0,
+                maximum: 1.0,
+                default: 0.7
+              },
+              timeRange: {
+                type: 'string',
+                description: 'Overall time range for analysis',
+                enum: ['1h', '6h', '12h', '24h', '1d', '7d', '30d', '1w', '1m'],
+                default: '24h'
+              },
+              compartmentId: {
+                type: 'string',
+                description: 'OCI compartment ID (optional)'
+              }
+            },
+            required: ['correlationType', 'primaryQuery', 'correlationFields']
+          }
         }
       ]
     }));
@@ -548,6 +868,16 @@ class OCILoganMCPServer {
             return await this.exportDashboard(args);
           case 'import_dashboard':
             return await this.importDashboard(args);
+          case 'execute_advanced_analytics':
+            return await this.executeAdvancedAnalytics(args);
+          case 'execute_statistical_analysis':
+            return await this.executeStatisticalAnalysis(args);
+          case 'execute_field_operations':
+            return await this.executeFieldOperations(args);
+          case 'search_log_patterns':
+            return await this.searchLogPatterns(args);
+          case 'correlation_analysis':
+            return await this.correlationAnalysis(args);
           default:
             throw new Error(`Unknown tool: ${name}`);
         }
@@ -1516,6 +1846,510 @@ ${exportJson}
       };
     } catch (error) {
       throw new Error(`Failed to import dashboard: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  private async executeAdvancedAnalytics(args: any) {
+    const { analyticsType, baseQuery, parameters = {}, timeRange = '24h', compartmentId } = args;
+
+    try {
+      let analyticsQuery = baseQuery;
+      
+      // Add time filter if not already present
+      if (!baseQuery.includes('Time >') && !baseQuery.includes('dateRelative')) {
+        const timeFilter = this.buildTimeFilter(timeRange);
+        analyticsQuery = `${baseQuery} ${timeFilter}`;
+      }
+
+      // Build the analytics command based on type
+      let analyticsCommand = '';
+      switch (analyticsType) {
+        case 'cluster':
+          const groupByFields = parameters.groupBy ? parameters.groupBy.join(', ') : '*';
+          const maxClusters = parameters.maxClusters || 10;
+          analyticsCommand = `cluster maxclusters=${maxClusters} t=0.8 field=${groupByFields}`;
+          break;
+        case 'link':
+          const linkFields = parameters.groupBy ? parameters.groupBy.join(', ') : 'Host';
+          analyticsCommand = `link ${linkFields}`;
+          break;
+        case 'nlp':
+          analyticsCommand = 'nlp';
+          break;
+        case 'classify':
+          analyticsCommand = 'classify';
+          break;
+        case 'outlier':
+          const threshold = parameters.threshold || 2;
+          analyticsCommand = `outlier threshold=${threshold}`;
+          break;
+        case 'sequence':
+          const pattern = parameters.sequencePattern || 'default';
+          analyticsCommand = `sequence ${pattern}`;
+          break;
+        case 'geostats':
+          const geoFields = parameters.geoFields || { latitude: 'lat', longitude: 'lon' };
+          analyticsCommand = `geostats latfield=${geoFields.latitude} longfield=${geoFields.longitude}`;
+          break;
+        case 'timecluster':
+          analyticsCommand = 'timecluster';
+          break;
+        default:
+          throw new Error(`Unsupported analytics type: ${analyticsType}`);
+      }
+
+      const fullQuery = `${analyticsQuery} | ${analyticsCommand}`;
+
+      const results = await this.logAnalyticsClient.executeQuery({
+        query: fullQuery,
+        timeRange,
+        compartmentId
+      });
+
+      if (!results.success) {
+        throw new Error(`Advanced analytics failed: ${results.error}`);
+      }
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `🔬 **Advanced Analytics Results**
+
+**Analytics Type:** ${analyticsType}
+**Base Query:** ${baseQuery}
+**Time Range:** ${timeRange}
+**Parameters:** ${JSON.stringify(parameters, null, 2)}
+**Results Found:** ${results.totalCount}
+**Execution Time:** ${results.executionTime}ms
+
+**Analytics Results:**
+\`\`\`json
+${JSON.stringify(results.data, null, 2)}
+\`\`\`
+
+*Advanced analytics performed using OCI Log Analytics ${analyticsType} capabilities.*`
+          }
+        ]
+      };
+    } catch (error) {
+      throw new Error(`Failed to execute advanced analytics: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  private async executeStatisticalAnalysis(args: any) {
+    const { statisticsType, baseQuery, aggregations, groupBy = [], timeInterval, limit = 10, timeRange = '24h', compartmentId } = args;
+
+    try {
+      let statisticsQuery = baseQuery;
+      
+      // Add time filter if not already present
+      if (!baseQuery.includes('Time >') && !baseQuery.includes('dateRelative')) {
+        const timeFilter = this.buildTimeFilter(timeRange);
+        statisticsQuery = `${baseQuery} ${timeFilter}`;
+      }
+
+      // Build aggregation functions
+      const aggFunctions = aggregations.map((agg: any) => {
+        const func = agg.function;
+        const field = agg.field ? ` ${agg.field}` : '';
+        const alias = agg.alias ? ` as '${agg.alias}'` : '';
+        return `${func}(${field})${alias}`;
+      }).join(', ');
+
+      // Build statistical command
+      let statsCommand = '';
+      switch (statisticsType) {
+        case 'stats':
+          const groupByClause = groupBy.length > 0 ? ` by ${groupBy.map(f => `'${f}'`).join(', ')}` : '';
+          statsCommand = `stats ${aggFunctions}${groupByClause}`;
+          break;
+        case 'timestats':
+          const interval = timeInterval || '1h';
+          const groupByTime = groupBy.length > 0 ? `, ${groupBy.map(f => `'${f}'`).join(', ')}` : '';
+          statsCommand = `timestats ${interval} ${aggFunctions}${groupByTime}`;
+          break;
+        case 'eventstats':
+          const eventGroupBy = groupBy.length > 0 ? ` by ${groupBy.map(f => `'${f}'`).join(', ')}` : '';
+          statsCommand = `eventstats ${aggFunctions}${eventGroupBy}`;
+          break;
+        case 'top':
+        case 'bottom':
+        case 'frequent':
+        case 'rare':
+          const field = groupBy[0] || aggregations[0]?.field || 'Host';
+          statsCommand = `${statisticsType} ${limit} '${field}'`;
+          break;
+        default:
+          throw new Error(`Unsupported statistics type: ${statisticsType}`);
+      }
+
+      const fullQuery = `${statisticsQuery} | ${statsCommand}`;
+
+      const results = await this.logAnalyticsClient.executeQuery({
+        query: fullQuery,
+        timeRange,
+        compartmentId
+      });
+
+      if (!results.success) {
+        throw new Error(`Statistical analysis failed: ${results.error}`);
+      }
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `📊 **Statistical Analysis Results**
+
+**Statistics Type:** ${statisticsType}
+**Base Query:** ${baseQuery}
+**Aggregations:** ${JSON.stringify(aggregations, null, 2)}
+**Group By:** ${groupBy.join(', ') || 'None'}
+**Time Range:** ${timeRange}
+**Results Found:** ${results.totalCount}
+**Execution Time:** ${results.executionTime}ms
+
+**Statistical Results:**
+\`\`\`json
+${JSON.stringify(results.data, null, 2)}
+\`\`\`
+
+*Statistical analysis performed using OCI Log Analytics ${statisticsType} command.*`
+          }
+        ]
+      };
+    } catch (error) {
+      throw new Error(`Failed to execute statistical analysis: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  private async executeFieldOperations(args: any) {
+    const { operation, baseQuery, operationDetails, timeRange = '24h', compartmentId } = args;
+
+    try {
+      let operationQuery = baseQuery;
+      
+      // Add time filter if not already present
+      if (!baseQuery.includes('Time >') && !baseQuery.includes('dateRelative')) {
+        const timeFilter = this.buildTimeFilter(timeRange);
+        operationQuery = `${baseQuery} ${timeFilter}`;
+      }
+
+      // Build operation command
+      let operationCommand = '';
+      switch (operation) {
+        case 'extract':
+          const pattern = operationDetails.extractPattern;
+          operationCommand = `extract ${pattern}`;
+          break;
+        case 'eval':
+          const expression = operationDetails.evalExpression;
+          operationCommand = `eval ${expression}`;
+          break;
+        case 'addfields':
+          const addExpression = operationDetails.evalExpression || 'newField = 1';
+          operationCommand = `addfields ${addExpression}`;
+          break;
+        case 'rename':
+          const renameMapping = operationDetails.renameMapping || {};
+          const renamePairs = Object.entries(renameMapping).map(([old, new_]) => `'${old}' AS '${new_}'`).join(', ');
+          operationCommand = `rename ${renamePairs}`;
+          break;
+        case 'fields':
+          const fieldList = operationDetails.fieldList || [];
+          const include = operationDetails.includeFields !== false;
+          const fieldsStr = fieldList.map(f => `'${f}'`).join(', ');
+          operationCommand = `fields ${include ? '' : '- '}${fieldsStr}`;
+          break;
+        case 'dedup':
+          const dedupFields = operationDetails.fieldList || ['Host'];
+          const dedupStr = dedupFields.map(f => `'${f}'`).join(', ');
+          operationCommand = `dedup ${dedupStr}`;
+          break;
+        case 'bucket':
+          const bucketField = operationDetails.bucketField || 'value';
+          const ranges = operationDetails.bucketRanges || [0, 10, 100, 1000];
+          operationCommand = `bucket '${bucketField}' [${ranges.join(', ')}]`;
+          break;
+        default:
+          throw new Error(`Unsupported field operation: ${operation}`);
+      }
+
+      const fullQuery = `${operationQuery} | ${operationCommand}`;
+
+      const results = await this.logAnalyticsClient.executeQuery({
+        query: fullQuery,
+        timeRange,
+        compartmentId
+      });
+
+      if (!results.success) {
+        throw new Error(`Field operation failed: ${results.error}`);
+      }
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `🔧 **Field Operation Results**
+
+**Operation:** ${operation}
+**Base Query:** ${baseQuery}
+**Operation Details:** ${JSON.stringify(operationDetails, null, 2)}
+**Time Range:** ${timeRange}
+**Results Found:** ${results.totalCount}
+**Execution Time:** ${results.executionTime}ms
+
+**Operation Results:**
+\`\`\`json
+${JSON.stringify(results.data, null, 2)}
+\`\`\`
+
+*Field operation performed using OCI Log Analytics ${operation} command.*`
+          }
+        ]
+      };
+    } catch (error) {
+      throw new Error(`Failed to execute field operation: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  private async searchLogPatterns(args: any) {
+    const { 
+      logSource, 
+      pattern, 
+      patternType = 'contains', 
+      fields = [], 
+      filterCriteria = {}, 
+      timeRange = '24h', 
+      maxResults = 100, 
+      compartmentId 
+    } = args;
+
+    try {
+      // Build base query with log source filter
+      let query = '';
+      if (logSource) {
+        query = `'Log Source' = '${logSource}'`;
+      }
+
+      // Add pattern search based on type
+      let patternClause = '';
+      switch (patternType) {
+        case 'wildcard':
+          patternClause = fields.length > 0 
+            ? fields.map(f => `'${f}' LIKE '${pattern}'`).join(' OR ')
+            : `* LIKE '${pattern}'`;
+          break;
+        case 'regex':
+          patternClause = fields.length > 0
+            ? fields.map(f => `'${f}' matches '${pattern}'`).join(' OR ')
+            : `* matches '${pattern}'`;
+          break;
+        case 'exact':
+          patternClause = fields.length > 0
+            ? fields.map(f => `'${f}' = '${pattern}'`).join(' OR ')
+            : `* = '${pattern}'`;
+          break;
+        case 'contains':
+          patternClause = fields.length > 0
+            ? fields.map(f => `'${f}' LIKE '%${pattern}%'`).join(' OR ')
+            : `* LIKE '%${pattern}%'`;
+          break;
+        default:
+          patternClause = `* LIKE '%${pattern}%'`;
+      }
+
+      // Combine query parts
+      if (query && patternClause) {
+        query = `${query} AND (${patternClause})`;
+      } else if (patternClause) {
+        query = patternClause;
+      }
+
+      // Add filter criteria
+      const filters = [];
+      if (filterCriteria.severity && filterCriteria.severity.length > 0) {
+        const severityFilter = filterCriteria.severity.map(s => `'${s}'`).join(', ');
+        filters.push(`Severity IN (${severityFilter})`);
+      }
+      if (filterCriteria.hostNames && filterCriteria.hostNames.length > 0) {
+        const hostFilter = filterCriteria.hostNames.map(h => `'${h}'`).join(', ');
+        filters.push(`'Host Name' IN (${hostFilter})`);
+      }
+      if (filterCriteria.ipAddresses && filterCriteria.ipAddresses.length > 0) {
+        const ipFilter = filterCriteria.ipAddresses.map(ip => `'${ip}'`).join(', ');
+        filters.push(`('Source IP' IN (${ipFilter}) OR 'Destination IP' IN (${ipFilter}))`);
+      }
+
+      if (filters.length > 0) {
+        query = `${query} AND ${filters.join(' AND ')}`;
+      }
+
+      // Add exclude patterns
+      if (filterCriteria.excludePatterns && filterCriteria.excludePatterns.length > 0) {
+        const excludeFilters = filterCriteria.excludePatterns.map(p => `NOT (* LIKE '%${p}%')`).join(' AND ');
+        query = `${query} AND ${excludeFilters}`;
+      }
+
+      // Add time filter
+      const timeFilter = this.buildTimeFilter(timeRange);
+      query = `${query} ${timeFilter}`;
+
+      // Add head limit
+      const fullQuery = `${query} | head ${maxResults}`;
+
+      const results = await this.logAnalyticsClient.executeQuery({
+        query: fullQuery,
+        timeRange,
+        compartmentId
+      });
+
+      if (!results.success) {
+        throw new Error(`Pattern search failed: ${results.error}`);
+      }
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `🔍 **Log Pattern Search Results**
+
+**Pattern:** ${pattern}
+**Pattern Type:** ${patternType}
+**Log Source:** ${logSource || 'All Sources'}
+**Search Fields:** ${fields.join(', ') || 'All Fields'}
+**Time Range:** ${timeRange}
+**Max Results:** ${maxResults}
+**Results Found:** ${results.totalCount}
+**Execution Time:** ${results.executionTime}ms
+
+**Pattern Matches:**
+\`\`\`json
+${JSON.stringify(results.data, null, 2)}
+\`\`\`
+
+*Pattern search performed using OCI Log Analytics with ${patternType} matching.*`
+          }
+        ]
+      };
+    } catch (error) {
+      throw new Error(`Failed to search log patterns: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  private async correlationAnalysis(args: any) {
+    const { 
+      correlationType, 
+      primaryQuery, 
+      correlationFields, 
+      timeWindow = '5m', 
+      secondaryLogSources = [], 
+      threshold = 0.7, 
+      timeRange = '24h', 
+      compartmentId 
+    } = args;
+
+    try {
+      let correlationQuery = primaryQuery;
+      
+      // Add time filter if not already present
+      if (!primaryQuery.includes('Time >') && !primaryQuery.includes('dateRelative')) {
+        const timeFilter = this.buildTimeFilter(timeRange);
+        correlationQuery = `${primaryQuery} ${timeFilter}`;
+      }
+
+      // Build correlation command based on type
+      let correlationCommand = '';
+      const fieldsList = correlationFields.map(f => `'${f}'`).join(', ');
+
+      switch (correlationType) {
+        case 'temporal':
+          correlationCommand = `link maxspan=${timeWindow} ${fieldsList}`;
+          break;
+        case 'entity_based':
+          correlationCommand = `cluster field=${fieldsList} t=${threshold}`;
+          break;
+        case 'transaction_link':
+          correlationCommand = `link startswith="${primaryQuery}" endswith="*" ${fieldsList}`;
+          break;
+        case 'sequence_analysis':
+          correlationCommand = `sequence ${fieldsList}`;
+          break;
+        default:
+          // Default to basic linking
+          correlationCommand = `link ${fieldsList}`;
+      }
+
+      const fullQuery = `${correlationQuery} | ${correlationCommand}`;
+
+      const results = await this.logAnalyticsClient.executeQuery({
+        query: fullQuery,
+        timeRange,
+        compartmentId
+      });
+
+      if (!results.success) {
+        throw new Error(`Correlation analysis failed: ${results.error}`);
+      }
+
+      // If secondary log sources are specified, perform additional correlation
+      let secondaryResults = null;
+      if (secondaryLogSources.length > 0) {
+        const secondaryQueries = secondaryLogSources.map(source => 
+          `'Log Source' = '${source}' AND (${correlationFields.map(f => `'${f}' != ''`).join(' OR ')})`
+        );
+        
+        for (const secQuery of secondaryQueries) {
+          const secTimeFilter = this.buildTimeFilter(timeRange);
+          const secFullQuery = `${secQuery} ${secTimeFilter} | ${correlationCommand}`;
+          
+          const secResult = await this.logAnalyticsClient.executeQuery({
+            query: secFullQuery,
+            timeRange,
+            compartmentId
+          });
+          
+          if (secResult.success) {
+            secondaryResults = secResult;
+            break;
+          }
+        }
+      }
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `🔗 **Correlation Analysis Results**
+
+**Correlation Type:** ${correlationType}
+**Primary Query:** ${primaryQuery}
+**Correlation Fields:** ${correlationFields.join(', ')}
+**Time Window:** ${timeWindow}
+**Threshold:** ${threshold}
+**Time Range:** ${timeRange}
+**Primary Results:** ${results.totalCount}
+**Secondary Results:** ${secondaryResults?.totalCount || 'N/A'}
+**Execution Time:** ${results.executionTime}ms
+
+**Primary Correlation Results:**
+\`\`\`json
+${JSON.stringify(results.data, null, 2)}
+\`\`\`
+
+${secondaryResults ? `**Secondary Correlation Results:**
+\`\`\`json
+${JSON.stringify(secondaryResults.data, null, 2)}
+\`\`\`` : ''}
+
+*Correlation analysis performed using OCI Log Analytics ${correlationType} capabilities.*`
+          }
+        ]
+      };
+    } catch (error) {
+      throw new Error(`Failed to execute correlation analysis: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 

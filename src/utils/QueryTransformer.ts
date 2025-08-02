@@ -84,6 +84,27 @@ export class QueryTransformer {
           query: "'Event Name' contains 'RoleAssign' or 'Event Name' contains 'PrivilegeUse' and Time > dateRelative(24h) | stats count by 'User Name', 'Event Name'",
           category: 'security',
           description: 'Detect potential privilege escalation activities'
+        },
+        {
+          id: 'security_alerts_clustering',
+          name: 'Security Alerts Pattern Analysis',
+          query: "Severity = 'error' AND 'Entity Type' = 'Security Alert' and Time > dateRelative(24h) | cluster maxclusters=10 t=0.8 field='Alert Type', 'Source IP'",
+          category: 'security',
+          description: 'Cluster security alerts to identify patterns using advanced analytics'
+        },
+        {
+          id: 'outlier_user_activity',
+          name: 'Anomalous User Activity Detection',
+          query: "'Event Name' contains 'User' and Time > dateRelative(7d) | stats count by 'User Name' | outlier threshold=2.5",
+          category: 'security',
+          description: 'Detect users with unusual activity levels using outlier analysis'
+        },
+        {
+          id: 'security_sequence_analysis',
+          name: 'Attack Sequence Detection',
+          query: "'Log Source' = 'Security Events' and Time > dateRelative(24h) | sequence 'User Name', 'IP Address' maxspan=1h",
+          category: 'security',
+          description: 'Identify sequences of security events that may indicate coordinated attacks'
         }
       ],
       'network': [
@@ -93,6 +114,34 @@ export class QueryTransformer {
           query: "'Log Source' = 'VCN Flow Logs' and 'Action' = 'ACCEPT' and Time > dateRelative(24h) | stats count by 'Source IP', 'Destination IP' | sort -count",
           category: 'network',
           description: 'Find high-volume network connections'
+        },
+        {
+          id: 'geographic_network_analysis',
+          name: 'Geographic Network Traffic Analysis',
+          query: "'Log Source' = 'VCN Flow Logs' and Time > dateRelative(24h) | geostats latfield='Source Latitude' longfield='Source Longitude' count by 'Protocol'",
+          category: 'network',
+          description: 'Analyze network traffic patterns by geographic location using geostats'
+        },
+        {
+          id: 'network_communication_linking',
+          name: 'Network Communication Correlation',
+          query: "'Log Source' = 'VCN Flow Logs' and Time > dateRelative(24h) | link 'Source IP', 'Destination IP' maxspan=5m",
+          category: 'network',
+          description: 'Link network communications to identify transaction flows'
+        },
+        {
+          id: 'top_talkers_analysis',
+          name: 'Top Network Talkers',
+          query: "'Log Source' = 'VCN Flow Logs' and Time > dateRelative(24h) | stats sum('Bytes') as total_bytes by 'Source IP' | top 10 'Source IP'",
+          category: 'network',
+          description: 'Identify top bandwidth consumers using statistical analysis'
+        },
+        {
+          id: 'network_protocol_trends',
+          name: 'Network Protocol Usage Trends',
+          query: "'Log Source' = 'VCN Flow Logs' and Time > dateRelative(7d) | timestats 1h count as connections by 'Protocol' | sort Time",
+          category: 'network',
+          description: 'Analyze network protocol usage trends over time'
         }
       ],
       'authentication': [
@@ -102,6 +151,117 @@ export class QueryTransformer {
           query: "'Event Name' = 'UserLogin' and 'User Name' contains 'admin' and Time > dateRelative(24h) | stats count by 'User Name', 'IP Address'",
           category: 'authentication',
           description: 'Monitor administrator account logins'
+        },
+        {
+          id: 'auth_time_patterns',
+          name: 'Authentication Time Pattern Analysis',
+          query: "'Event Name' contains 'Login' and Time > dateRelative(7d) | timestats 1h count as logins by 'Event Name' | eval hour=strftime(Time, '%H') | stats avg(logins) as avg_logins by hour | sort hour",
+          category: 'authentication',
+          description: 'Analyze authentication patterns by time of day using eval and timestats'
+        },
+        {
+          id: 'failed_auth_clustering',
+          name: 'Failed Authentication Pattern Clustering',
+          query: "'Event Name' = 'UserLoginFailed' and Time > dateRelative(24h) | cluster maxclusters=5 t=0.7 field='User Name', 'IP Address', 'Error Code'",
+          category: 'authentication',
+          description: 'Cluster failed authentication attempts to identify attack patterns'
+        },
+        {
+          id: 'auth_success_rate',
+          name: 'Authentication Success Rate Analysis',
+          query: "'Event Name' contains 'Login' and Time > dateRelative(24h) | stats count by 'Event Name', 'User Name' | eval success_rate=if('Event Name'='UserLogin', count, 0) | stats sum(success_rate) as successful, sum(count) as total by 'User Name' | eval success_percent=round((successful/total)*100, 2) | sort -success_percent",
+          category: 'authentication',
+          description: 'Calculate authentication success rates using advanced field operations'
+        }
+      ],
+      'advanced_analytics': [
+        {
+          id: 'nlp_log_analysis',
+          name: 'Natural Language Processing on Logs',
+          query: "'Log Message' is not null and Time > dateRelative(24h) | nlp | classify sentiment | stats count by sentiment",
+          category: 'advanced_analytics',
+          description: 'Apply NLP to analyze log message sentiment and classification'
+        },
+        {
+          id: 'time_based_clustering',
+          name: 'Temporal Event Clustering',
+          query: "* and Time > dateRelative(24h) | timecluster span=1h | stats count by cluster_id, 'Event Name' | sort -count",
+          category: 'advanced_analytics',
+          description: 'Cluster events based on temporal patterns using timecluster'
+        },
+        {
+          id: 'field_extraction_analysis',
+          name: 'Dynamic Field Extraction',
+          query: "'Log Message' contains 'user=' and Time > dateRelative(24h) | extract 'user=(?<extracted_user>[^\\s]+)' | stats count by extracted_user | sort -count",
+          category: 'advanced_analytics',
+          description: 'Extract custom fields from log messages using regex patterns'
+        },
+        {
+          id: 'bucket_analysis',
+          name: 'Response Time Bucket Analysis',
+          query: "'Response Time' is not null and Time > dateRelative(24h) | bucket 'Response Time' [0, 100, 500, 1000, 5000] | stats count by 'Response Time_bucket', 'Service Name' | sort 'Response Time_bucket'",
+          category: 'advanced_analytics',
+          description: 'Bucket response times into ranges for performance analysis'
+        },
+        {
+          id: 'dedup_unique_events',
+          name: 'Unique Events Analysis',
+          query: "* and Time > dateRelative(24h) | dedup 'Event Name', 'User Name', 'Resource Name' | stats count by 'Event Name' | sort -count",
+          category: 'advanced_analytics',
+          description: 'Remove duplicate events to analyze unique occurrences'
+        }
+      ],
+      'statistical_analysis': [
+        {
+          id: 'error_frequency_stats',
+          name: 'Error Frequency Statistical Analysis',
+          query: "Severity = 'error' and Time > dateRelative(7d) | timestats 1h count as errors | eventstats avg(errors) as avg_errors, stdev(errors) as stdev_errors | eval z_score=(errors-avg_errors)/stdev_errors | where z_score > 2",
+          category: 'statistical_analysis',
+          description: 'Statistical analysis of error frequencies with Z-score calculation'
+        },
+        {
+          id: 'user_activity_stats',
+          name: 'User Activity Statistical Summary',
+          query: "'User Name' is not null and Time > dateRelative(24h) | stats count, distinct_count('Event Name') as unique_events, min(Time) as first_activity, max(Time) as last_activity by 'User Name' | eval activity_duration=last_activity-first_activity | sort -count",
+          category: 'statistical_analysis',
+          description: 'Comprehensive statistical analysis of user activity patterns'
+        },
+        {
+          id: 'resource_usage_percentiles',
+          name: 'Resource Usage Percentile Analysis',
+          query: "'CPU Usage' is not null and Time > dateRelative(24h) | stats count, avg('CPU Usage') as avg_cpu, perc50('CPU Usage') as median_cpu, perc95('CPU Usage') as p95_cpu, perc99('CPU Usage') as p99_cpu by 'Host Name' | sort -p99_cpu",
+          category: 'statistical_analysis',
+          description: 'Percentile analysis of resource usage metrics'
+        },
+        {
+          id: 'frequent_rare_analysis',
+          name: 'Frequent and Rare Events Analysis',
+          query: "* and Time > dateRelative(24h) | stats count by 'Event Name' | eval event_frequency=case(count>1000, 'very_frequent', count>100, 'frequent', count>10, 'common', count>1, 'rare', 'very_rare') | stats count as event_types by event_frequency | sort -event_types",
+          category: 'statistical_analysis',
+          description: 'Classify events by frequency using statistical thresholds'
+        }
+      ],
+      'compliance_monitoring': [
+        {
+          id: 'audit_trail_analysis',
+          name: 'Audit Trail Compliance Check',
+          query: "'Log Source' = 'OCI Audit Logs' and Time > dateRelative(24h) | stats count by 'Event Name', 'User Name', 'Resource Name' | where count > 1 | sort -count",
+          category: 'compliance_monitoring',
+          description: 'Monitor audit trails for compliance verification'
+        },
+        {
+          id: 'privileged_access_monitoring',
+          name: 'Privileged Access Monitoring',
+          query: "'Event Name' contains 'Admin' or 'Event Name' contains 'Root' or 'Event Name' contains 'Privilege' and Time > dateRelative(24h) | addfields risk_score=case('Event Name' contains 'Root', 5, 'Event Name' contains 'Admin', 3, 1) | stats sum(risk_score) as total_risk, count as access_count by 'User Name' | sort -total_risk",
+          category: 'compliance_monitoring',
+          description: 'Monitor privileged access with risk scoring using addfields and eval'
+        },
+        {
+          id: 'data_access_patterns',
+          name: 'Sensitive Data Access Patterns',
+          query: "'Resource Name' contains 'sensitive' or 'Resource Name' contains 'pii' or 'Resource Name' contains 'confidential' and Time > dateRelative(7d) | link 'User Name', 'Resource Name' maxspan=1h | stats count as access_frequency by linked_events | sort -access_frequency",
+          category: 'compliance_monitoring',
+          description: 'Analyze patterns of sensitive data access using link analysis'
         }
       ]
     };
