@@ -12,27 +12,29 @@ A Model Context Protocol (MCP) server that connects Claude to Oracle Cloud Infra
 
 ## Features
 
-### 🔍 Query Execution
-- **Execute Logan Queries**: Run predefined Logan Security Dashboard queries against OCI Logging Analytics
-- **Natural Language Search**: Convert natural language to OCI query syntax
-- **MITRE ATT&CK Integration**: Search for specific MITRE techniques and tactics (default 30d for Sysmon data)
-- **IP Activity Analysis**: Comprehensive analysis of IP address behavior with multiple analysis types
-- **Time Correlation**: Synchronized time periods across all logs for proper correlation
+### 🔍 Core Query Execution (Fully Implemented)
+- **Execute Logan Queries**: Direct execution against OCI Logging Analytics API via Python backend
+- **Natural Language Search**: AI-powered conversion of natural language to OCI query syntax
+- **MITRE ATT&CK Integration**: Search for specific MITRE techniques and tactics with 90-day default range
+- **IP Activity Analysis**: Comprehensive analysis with multiple analysis types (authentication, network, threat_intel)
+- **Time Correlation**: Precise UTC timezone handling for accurate cross-log correlation
+- **Query Syntax Fixing**: Automatic OCI compatibility fixes for common syntax issues
+- **Real-time Data**: Direct OCI API integration with NO mock data policy
 
-### 🛡️ Security Analysis
-- **Security Event Search**: Find authentication failures, privilege escalations, network anomalies
-- **Threat Intelligence**: Analyze suspicious activities and threat patterns
-- **RITA Integration**: Network behavior analysis capabilities
-- **Real-time Monitoring**: Query live security events and logs with accurate time ranges
-- **Cross-Log Correlation**: Consistent time filtering for correlating events across different log sources
+### 🛡️ Security Analysis (Fully Implemented)
+- **Security Event Search**: Advanced pattern matching for authentication failures, privilege escalations
+- **Threat Intelligence**: Statistical analysis and anomaly detection
+- **Advanced Analytics**: Clustering, NLP processing, outlier detection, correlation analysis
+- **Field Operations**: Dynamic field extraction, pattern searching, data transformation
+- **Statistical Analysis**: Comprehensive statistical operations on log data
+- **Cross-Log Correlation**: Synchronized time periods across different log sources
 
-### 📊 Dashboard Management
-- **List Dashboards**: Browse available OCI dashboards in your tenant
-- **Dashboard Details**: Get complete dashboard configurations and widget information
-- **Create Dashboards**: Build new dashboards with custom queries and visualizations
-- **Update Dashboards**: Modify existing dashboards, add/remove widgets
-- **Export/Import**: JSON-based dashboard portability
-- **Saved Searches**: Create and manage reusable query templates
+### 📊 Dashboard Management (Partially Implemented)
+- **List Dashboards**: ⚠️ Returns sample data (not connected to real OCI dashboards)
+- **Dashboard Details**: Basic functionality via Python client
+- **Create/Update Dashboards**: ⚠️ Mock implementations only
+- **Export/Import**: Limited JSON-based functionality
+- **Saved Searches**: ⚠️ Returns sample data (not connected to real OCI saved searches)
 
 ### 🔧 Developer Tools
 - **Query Validation**: Syntax validation with automatic error fixing
@@ -187,12 +189,12 @@ Show me the documentation for OCI query syntax
 Get help with MITRE technique mapping
 ```
 
-## Available Tools
+## Available Tools (19 Total Implemented)
 
-### Core Query Tools
+### Core Query Tools (Fully Functional)
 
 #### `execute_logan_query`
-Execute OCI Logging Analytics queries with validation and error handling.
+Direct execution of OCI Logging Analytics queries via Python backend with comprehensive validation, syntax fixing, and error handling. Supports real-time data retrieval with NO mock data.
 
 **Parameters:**
 - `query` (required): OCI Logging Analytics query
@@ -202,7 +204,7 @@ Execute OCI Logging Analytics queries with validation and error handling.
 - `environment` (optional): Multi-tenant environment name
 
 #### `search_security_events`
-Search for security events using natural language.
+AI-powered natural language to OCI query conversion for security event searching with advanced pattern matching.
 
 **Parameters:**
 - `searchTerm` (required): Natural language description
@@ -211,7 +213,7 @@ Search for security events using natural language.
 - `limit` (optional): Maximum results - Default: 100
 
 #### `get_mitre_techniques`
-Search for MITRE ATT&CK techniques in logs.
+Comprehensive MITRE ATT&CK technique analysis with 90-day default range optimized for security data.
 
 **Parameters:**
 - `techniqueId` (optional): Specific technique ID (e.g., T1003, T1110) or "all"
@@ -219,30 +221,51 @@ Search for MITRE ATT&CK techniques in logs.
 - `timeRange` (optional): Time range - Default: 30d (recommended for Sysmon data)
 
 #### `analyze_ip_activity`
-Comprehensive IP address activity analysis.
+Advanced IP address behavioral analysis with multiple analysis types: full, authentication, network, threat_intel, communication_patterns.
 
 **Parameters:**
 - `ipAddress` (required): IP address to analyze
 - `analysisType` (optional): Type of analysis (full, authentication, network, threat_intel, communication_patterns) - Default: full
 - `timeRange` (optional): Time range - Default: 24h
 
-### Dashboard Management Tools
+### Advanced Analytics Tools (Fully Implemented)
 
-#### `list_dashboards`
-List OCI dashboards from the tenant.
+#### `perform_statistical_analysis`
+Advanced statistical operations on query results including clustering, outlier detection, and trend analysis.
+
+#### `perform_advanced_analytics`
+ML-powered analytics including clustering algorithms, NLP processing, and anomaly detection.
+
+#### `search_field_patterns`
+Dynamic field pattern searching and extraction from log data.
+
+#### `correlate_events`
+Cross-log event correlation with time synchronization and pattern matching.
+
+#### `perform_field_operations`
+Field extraction, transformation, and manipulation operations.
+
+### Dashboard Management Tools (Partially Implemented)
+
+#### `list_dashboards` ⚠️ (Limited Implementation)
+Returns sample dashboard data. Not connected to real OCI Dashboard/Management APIs.
 
 **Parameters:**
-- `compartmentId` (optional): OCI compartment OCID (uses default if not provided)
-- `displayName` (optional): Filter dashboards by display name (partial match)
-- `lifecycleState` (optional): Filter by lifecycle state (CREATING, UPDATING, ACTIVE, DELETING, DELETED, FAILED) - Default: ACTIVE
+- `compartmentId` (optional): OCI compartment OCID 
+- `displayName` (optional): Filter dashboards by display name
+- `lifecycleState` (optional): Filter by lifecycle state - Default: ACTIVE
 - `limit` (optional): Maximum number of dashboards to return - Default: 50
 
-#### `get_dashboard`
-Get details of a specific OCI dashboard.
+**Note:** Currently returns mock data. Real OCI dashboard integration pending.
+
+#### `get_dashboard` (Partial Implementation)
+Basic dashboard details retrieval via Python client.
 
 **Parameters:**
 - `dashboardId` (required): OCID of the dashboard to retrieve
 - `compartmentId` (optional): OCI compartment OCID (for validation)
+
+**Note:** Limited functionality. Full implementation requires OCI Management Dashboard SDK.
 
 #### `get_dashboard_tiles`
 Get tiles/widgets from a specific OCI dashboard.
@@ -251,17 +274,19 @@ Get tiles/widgets from a specific OCI dashboard.
 - `dashboardId` (required): OCID of the dashboard
 - `tileType` (optional): Filter tiles by type (all, query, visualization, metric, text)
 
-#### `create_dashboard`
-Create a new dashboard with queries and visualizations.
+#### `create_dashboard` ⚠️ (Mock Implementation)
+Returns mock response for dashboard creation. Not connected to real OCI APIs.
 
 **Parameters:**
 - `displayName` (required): Display name for the dashboard
 - `description` (optional): Description of the dashboard
-- `compartmentId` (optional): OCI compartment OCID (uses default if not provided)
-- `dashboardConfig` (optional): Dashboard configuration including widgets array
+- `compartmentId` (optional): OCI compartment OCID
+- `dashboardConfig` (optional): Dashboard configuration
 
-#### `update_dashboard`
-Update an existing dashboard.
+**Note:** Mock implementation only. Real dashboard creation requires OCI SDK integration.
+
+#### `update_dashboard` ⚠️ (Mock Implementation)
+Returns mock response for dashboard updates. Not connected to real OCI APIs.
 
 **Parameters:**
 - `dashboardId` (required): OCID of the dashboard to update
@@ -269,6 +294,8 @@ Update an existing dashboard.
 - `description` (optional): New description
 - `addWidgets` (optional): Array of widgets to add
 - `removeWidgetIds` (optional): Array of widget IDs to remove
+
+**Note:** Mock implementation only.
 
 #### `export_dashboard`
 Export dashboard configuration as JSON.
@@ -287,23 +314,27 @@ Import dashboard from JSON configuration.
 
 ### Saved Search Tools
 
-#### `create_saved_search`
-Create a saved search in Log Analytics.
+#### `create_saved_search` ⚠️ (Mock Implementation)
+Returns sample data for saved search creation. Not connected to real OCI saved search APIs.
 
 **Parameters:**
 - `displayName` (required): Display name for the saved search
 - `query` (required): Logan query to save
 - `description` (optional): Description of the saved search
-- `compartmentId` (optional): OCI compartment OCID (uses default if not provided)
-- `widgetType` (optional): Preferred visualization type (SEARCH, CHART, TABLE, METRIC) - Default: SEARCH
+- `compartmentId` (optional): OCI compartment OCID
+- `widgetType` (optional): Preferred visualization type - Default: SEARCH
 
-#### `list_saved_searches`
-List saved searches from Log Analytics.
+**Note:** Returns mock data. Real implementation pending.
+
+#### `list_saved_searches` ⚠️ (Mock Implementation)
+Returns sample saved search data. Not connected to real OCI APIs.
 
 **Parameters:**
-- `compartmentId` (optional): OCI compartment OCID (uses default if not provided)
+- `compartmentId` (optional): OCI compartment OCID
 - `displayName` (optional): Filter by display name
 - `limit` (optional): Maximum number of results - Default: 50
+
+**Note:** Returns sample data only.
 
 ### Utility Tools
 
@@ -432,6 +463,35 @@ npm run dev      # Development mode
 npm run test     # Run tests
 ```
 
+### Implementation Status & Limitations
+
+#### ✅ **Fully Implemented Features:**
+- Core query execution with real OCI API integration
+- 19 MCP tools for security analysis and log querying
+- Python backend with OCI SDK integration
+- Advanced analytics (clustering, NLP, statistical analysis)
+- Query syntax validation and automatic fixing
+- MITRE ATT&CK technique mapping
+- IP address behavioral analysis
+- Time correlation with UTC timezone handling
+- NO mock data policy - all data is real from OCI
+
+#### ⚠️ **Partially Implemented Features:**
+- Dashboard listing (returns sample data)
+- Dashboard details retrieval (basic functionality)
+- Export/import capabilities (limited)
+
+#### ❌ **Mock/Placeholder Features:**
+- Dashboard creation and modification
+- Saved search management
+- RITA network analysis integration
+
+#### 🔧 **Known Technical Issues:**
+- Hardcoded Python script paths (requires manual configuration)
+- Limited error handling for Python process failures
+- Dashboard management APIs not connected to real OCI services
+- Path resolution issues on different systems
+
 ### Git Repository Setup
 
 The repository is configured to exclude unnecessary files from version control:
@@ -450,32 +510,58 @@ The repository is configured to exclude unnecessary files from version control:
 3. Run `./setup-python.sh` to create Python virtual environment
 4. The `python/venv/` directory will be automatically ignored
 
-### Project Structure
+### Actual Architecture & Data Flow
+
+```
+Claude/AI Assistant
+        ↓
+MCP Protocol (stdio)
+        ↓
+TypeScript Server (src/index.ts) - 19 MCP Tools
+        ↓
+LogAnalyticsClient.ts - OCI Integration Layer
+        ↓
+Python Process Spawn (child_process)
+        ↓
+Python Backend (logan_client.py, dashboard_client.py)
+        ↓
+OCI SDK (Python) - Direct API Calls
+        ↓
+OCI Log Analytics API (Real Data - NO Mock Policy)
+```
+
+### Project Structure (Actual Implementation)
 
 ```
 src/
-├── index.ts              # Main MCP server with all 16 tools
+├── index.ts              # Main MCP server with 19 implemented tools
 ├── oci/
-│   └── LogAnalyticsClient.ts  # OCI integration with dashboard support
+│   └── LogAnalyticsClient.ts  # OCI integration with Python backend spawning
 └── utils/
     ├── QueryValidator.ts      # Query validation and syntax fixing
     ├── QueryTransformer.ts    # Query transformation and MITRE mapping
-    └── DocumentationLookup.ts # Help system
+    └── DocumentationLookup.ts # Built-in help system
 
 python/
-├── logan_client.py       # Python Logan client for query execution
-├── dashboard_client.py   # Dashboard management client
-├── security_analyzer.py  # Security event analysis
+├── venv/                 # Python virtual environment (created by setup-python.sh)
+├── logan_client.py       # Primary OCI Log Analytics client (fully functional)
+├── dashboard_client.py   # Dashboard operations (partial implementation)
+├── security_analyzer.py  # Security event analysis (fully functional)
 ├── query_mapper.py       # Query mapping utilities
-├── query_validator.py    # Python query validation
-└── requirements.txt      # Python dependencies
+├── query_validator.py    # Python-side query validation
+└── requirements.txt      # Python dependencies (oci-sdk, etc.)
 
-test files:
-├── test-server.js        # Server functionality tests
+test files: (Excluded from git)
+├── test-server.js        # MCP server functionality tests
 ├── test-oci-direct.js    # Direct OCI connection tests
 ├── test-time-correlation.js # Time correlation verification
 ├── test-dashboard-export.js # Dashboard export tests
-└── test-time-update.js   # Time update tests
+└── test-time-update.js   # Time synchronization tests
+
+config files:
+├── claude_desktop_config.json.template # Claude Desktop MCP configuration
+├── setup-python.sh      # Python environment setup script
+└── .gitignore           # Excludes venv/, test files, credentials
 ```
 
 ## Contributing
@@ -500,19 +586,28 @@ MIT License - see LICENSE file for details.
 
 ## Recent Updates
 
-### v1.2.0 - Time Correlation Fix (July 2025)
-- ✅ **Fixed time correlation**: All queries now show accurate data periods with date ranges
-- 📊 **Enhanced dashboard management**: Added full dashboard CRUD operations
-- 🔍 **Improved saved searches**: Create and manage reusable query templates
-- 🐛 **Query syntax fixes**: Automatic OCI compatibility fixes for common syntax issues
-- 📝 **Better documentation**: Comprehensive help system with examples
+### v1.2.0 - Architecture Analysis & Documentation Update (August 2025)
+- ✅ **Code Analysis Complete**: Comprehensive codebase analysis revealing actual vs documented features
+- 📊 **Dashboard Status Clarified**: Updated documentation to reflect partial/mock implementations
+- 🔍 **Tool Inventory Corrected**: 19 total tools with accurate implementation status
+- 🐛 **Technical Debt Identified**: Hardcoded paths, mock implementations documented
+- 📝 **Architecture Documented**: Real data flow and Python backend integration detailed
+- 🔄 **License Reverted**: Changed from Apache License back to MIT
 
-### Key Improvements
-- **Time Display**: Shows "Last 30 Days (2025-06-29 to 2025-07-29)" instead of generic "30d"
-- **Cross-Log Correlation**: Consistent time periods across different log sources
-- **Dashboard Tools**: 6 new dashboard management functions
-- **Python Integration**: Robust Python backend for query execution
-- **Debug Logging**: Extensive troubleshooting capabilities
+### Implementation Reality Check
+- **Query Execution**: ✅ Fully functional with real OCI API integration
+- **Security Analytics**: ✅ Complete implementation with advanced analytics
+- **Dashboard Management**: ⚠️ Partial/mock implementations only
+- **Python Backend**: ✅ Robust integration with OCI SDK
+- **Time Correlation**: ✅ Accurate UTC timezone handling
+- **NO Mock Data**: ✅ Strict policy enforced for query results
+
+### Next Development Priorities
+1. Fix hardcoded Python script paths
+2. Implement real OCI Dashboard/Management API integration
+3. Add comprehensive error handling
+4. Implement query template library
+5. Add configuration management system
 
 **Version**: 1.2.0  
-**Last Updated**: July 2025
+**Last Updated**: August 2025
