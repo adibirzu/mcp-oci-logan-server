@@ -2,10 +2,12 @@
   "mcpServers": {
     "oci-logan": {
       "command": "node",
-      "args": ["/path/to/YOUR/mcp-oci-logan-server/dist/index.js"],
+      "args": ["/ABSOLUTE/PATH/TO/mcp-oci-logan-server/dist/index.js"],
       "env": {
-        "OCI_COMPARTMENT_ID": "your-oci-compartment-ocid-here",
-        "SUPPRESS_LABEL_WARNING": "True"
+        "OCI_COMPARTMENT_ID": "ocid1.compartment.oc1..aaaaaaaa[YOUR-COMPARTMENT-ID]",
+        "OCI_REGION": "us-ashburn-1",
+        "SUPPRESS_LABEL_WARNING": "True",
+        "LOGAN_DEBUG": "false"
       }
     }
   }

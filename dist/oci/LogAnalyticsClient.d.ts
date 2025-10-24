@@ -14,6 +14,7 @@ export interface QueryResult {
     error?: string;
     queryUsed?: string;
     arePartialResults?: boolean;
+    metadata?: any;
 }
 export interface ConnectionStatus {
     connected: boolean;
@@ -88,4 +89,58 @@ export declare class LogAnalyticsClient {
         displayName?: string;
         limit?: number;
     }): Promise<any>;
+    listLogSources(request: {
+        compartmentId: string;
+        sourceType?: string;
+        displayName?: string;
+        limit?: number;
+    }): Promise<QueryResult>;
+    getLogSourceDetails(request: {
+        sourceName: string;
+        compartmentId: string;
+    }): Promise<QueryResult>;
+    listActiveLogSources(request: {
+        compartmentId: string;
+        timePeriodMinutes?: number;
+        limit?: number;
+    }): Promise<QueryResult>;
+    listLogFields(request: {
+        fieldType?: string;
+        isSystem?: boolean;
+        fieldName?: string;
+        limit?: number;
+    }): Promise<QueryResult>;
+    getFieldDetails(request: {
+        fieldName: string;
+    }): Promise<QueryResult>;
+    getNamespaceInfo(request: {
+        includeStorageStats?: boolean;
+    }): Promise<QueryResult>;
+    listEntities(request: {
+        compartmentId: string;
+        entityType?: string;
+        cloudResourceId?: string;
+        limit?: number;
+    }): Promise<QueryResult>;
+    getStorageUsage(request: {
+        compartmentId: string;
+        timeRange?: string;
+    }): Promise<QueryResult>;
+    listParsers(request: {
+        parserType?: string;
+        displayName?: string;
+        isSystem?: boolean;
+        limit?: number;
+    }): Promise<QueryResult>;
+    listLabels(request: {
+        labelType?: string;
+        displayName?: string;
+        limit?: number;
+    }): Promise<QueryResult>;
+    queryRecentUploads(request: {
+        compartmentId: string;
+        status?: string;
+        timeRange?: string;
+        limit?: number;
+    }): Promise<QueryResult>;
 }

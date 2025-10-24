@@ -814,6 +814,259 @@ class OCILoganMCPServer {
             },
             required: ['correlationType', 'primaryQuery', 'correlationFields']
           }
+        },
+        {
+          name: 'list_log_sources',
+          description: 'List available log sources in OCI Logging Analytics',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              compartmentId: {
+                type: 'string',
+                description: 'OCI compartment ID (uses default if not provided)'
+              },
+              sourceType: {
+                type: 'string',
+                description: 'Filter by source type',
+                enum: ['ENTITY', 'SYSTEM', 'USER_DEFINED', 'all']
+              },
+              displayName: {
+                type: 'string',
+                description: 'Filter by display name (partial match)'
+              },
+              limit: {
+                type: 'number',
+                description: 'Maximum number of sources to return',
+                default: 100
+              }
+            }
+          }
+        },
+        {
+          name: 'get_log_source_details',
+          description: 'Get detailed information about a specific log source',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              sourceName: {
+                type: 'string',
+                description: 'Name of the log source to query'
+              },
+              compartmentId: {
+                type: 'string',
+                description: 'OCI compartment ID (optional)'
+              }
+            },
+            required: ['sourceName']
+          }
+        },
+        {
+          name: 'list_active_log_sources',
+          description: 'List all log sources with their actual log counts. Shows which sources have data and how many logs each contains. Combines Management API (for complete source list) with Query API (for log counts).',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              compartmentId: {
+                type: 'string',
+                description: 'OCI compartment ID (uses default from environment if not provided)'
+              },
+              timePeriodMinutes: {
+                type: 'number',
+                description: 'Time period to count logs (in minutes)',
+                default: 60
+              },
+              limit: {
+                type: 'number',
+                description: 'Maximum number of sources to return',
+                default: 100
+              }
+            }
+          }
+        },
+        {
+          name: 'list_log_fields',
+          description: 'List available fields in OCI Logging Analytics',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              fieldType: {
+                type: 'string',
+                description: 'Filter by field type',
+                enum: ['FACET', 'DIMENSION', 'METRIC', 'TABLE_FIELD', 'all'],
+                default: 'all'
+              },
+              isSystem: {
+                type: 'boolean',
+                description: 'Filter system vs user-defined fields'
+              },
+              fieldName: {
+                type: 'string',
+                description: 'Search by field name (partial match)'
+              },
+              limit: {
+                type: 'number',
+                description: 'Maximum number of fields to return',
+                default: 100
+              }
+            }
+          }
+        },
+        {
+          name: 'get_field_details',
+          description: 'Get detailed information about a specific field including data type and cardinality',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              fieldName: {
+                type: 'string',
+                description: 'Name of the field to query'
+              }
+            },
+            required: ['fieldName']
+          }
+        },
+        {
+          name: 'get_namespace_info',
+          description: 'Get information about the OCI Logging Analytics namespace',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              includeStorageStats: {
+                type: 'boolean',
+                description: 'Include storage usage statistics',
+                default: true
+              }
+            }
+          }
+        },
+        {
+          name: 'list_entities',
+          description: 'List entities (hosts, services, applications) in OCI Logging Analytics',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              compartmentId: {
+                type: 'string',
+                description: 'OCI compartment ID (uses default if not provided)'
+              },
+              entityType: {
+                type: 'string',
+                description: 'Filter by entity type',
+                enum: ['HOST', 'DATABASE', 'APPLICATION', 'WEBSERVER', 'all'],
+                default: 'all'
+              },
+              cloudResourceId: {
+                type: 'string',
+                description: 'Filter by cloud resource ID'
+              },
+              limit: {
+                type: 'number',
+                description: 'Maximum number of entities to return',
+                default: 100
+              }
+            }
+          }
+        },
+        {
+          name: 'get_storage_usage',
+          description: 'Get storage usage statistics for OCI Logging Analytics',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              compartmentId: {
+                type: 'string',
+                description: 'OCI compartment ID (uses default if not provided)'
+              },
+              timeRange: {
+                type: 'string',
+                description: 'Time range for usage statistics',
+                enum: ['7d', '30d', '90d'],
+                default: '30d'
+              }
+            }
+          }
+        },
+        {
+          name: 'list_parsers',
+          description: 'List available log parsers in OCI Logging Analytics',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              parserType: {
+                type: 'string',
+                description: 'Filter by parser type',
+                enum: ['REGEX', 'XML', 'JSON', 'DELIMITED', 'all'],
+                default: 'all'
+              },
+              displayName: {
+                type: 'string',
+                description: 'Search by parser name (partial match)'
+              },
+              isSystem: {
+                type: 'boolean',
+                description: 'Filter system vs user-defined parsers'
+              },
+              limit: {
+                type: 'number',
+                description: 'Maximum number of parsers to return',
+                default: 100
+              }
+            }
+          }
+        },
+        {
+          name: 'list_labels',
+          description: 'List available labels in OCI Logging Analytics for log categorization',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              labelType: {
+                type: 'string',
+                description: 'Filter by label type',
+                enum: ['PRIORITY', 'PROBLEM', 'all'],
+                default: 'all'
+              },
+              displayName: {
+                type: 'string',
+                description: 'Search by label name (partial match)'
+              },
+              limit: {
+                type: 'number',
+                description: 'Maximum number of labels to return',
+                default: 100
+              }
+            }
+          }
+        },
+        {
+          name: 'query_recent_uploads',
+          description: 'Query recent log uploads and their status in OCI Logging Analytics',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              compartmentId: {
+                type: 'string',
+                description: 'OCI compartment ID (uses default if not provided)'
+              },
+              status: {
+                type: 'string',
+                description: 'Filter by upload status',
+                enum: ['IN_PROGRESS', 'SUCCESSFUL', 'FAILED', 'all'],
+                default: 'all'
+              },
+              timeRange: {
+                type: 'string',
+                description: 'Time range to check',
+                enum: ['1h', '6h', '24h', '7d'],
+                default: '24h'
+              },
+              limit: {
+                type: 'number',
+                description: 'Maximum number of uploads to return',
+                default: 50
+              }
+            }
+          }
         }
       ]
     }));
@@ -878,6 +1131,28 @@ class OCILoganMCPServer {
             return await this.searchLogPatterns(args);
           case 'correlation_analysis':
             return await this.correlationAnalysis(args);
+          case 'list_log_sources':
+            return await this.listLogSources(args);
+          case 'get_log_source_details':
+            return await this.getLogSourceDetails(args);
+          case 'list_active_log_sources':
+            return await this.listActiveLogSources(args);
+          case 'list_log_fields':
+            return await this.listLogFields(args);
+          case 'get_field_details':
+            return await this.getFieldDetails(args);
+          case 'get_namespace_info':
+            return await this.getNamespaceInfo(args);
+          case 'list_entities':
+            return await this.listEntities(args);
+          case 'get_storage_usage':
+            return await this.getStorageUsage(args);
+          case 'list_parsers':
+            return await this.listParsers(args);
+          case 'list_labels':
+            return await this.listLabels(args);
+          case 'query_recent_uploads':
+            return await this.queryRecentUploads(args);
           default:
             throw new Error(`Unknown tool: ${name}`);
         }
@@ -942,42 +1217,11 @@ class OCILoganMCPServer {
       console.error('Failed to write execute debug log:', e);
     }
 
-    // Handle compartment selection
+    // Handle compartment selection - use provided or default from environment
     const compartmentId = providedCompartmentId || DEFAULT_COMPARTMENT_ID;
 
-    if (!providedCompartmentId) {
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `❓ **Compartment Selection Required**
-
-**Current Query:** ${query}
-**Time Range:** ${timeRange}
-
-**Please specify which OCI compartment to query against.**
-
-**Usage Example:**
-\`\`\`json
-{
-  "query": "${query}",
-  "queryName": "${queryName || 'Custom Query'}",
-  "timeRange": "${timeRange}",
-  "compartmentId": "${EXAMPLE_COMPARTMENT_ID}"
-}
-\`\`\`
-
-**Default Compartment Available:**
-- Production Environment: \`${EXAMPLE_COMPARTMENT_ID}\`
-
-**To execute with default compartment, run:**
-execute_logan_query with compartmentId: "${EXAMPLE_COMPARTMENT_ID}"
-
-*Different compartments may contain different log sources and data volumes.*`
-          }
-        ]
-      };
-    }
+    // Log which compartment we're using
+    console.error('MCP DEBUG: Using compartment:', compartmentId, 'from', providedCompartmentId ? 'user' : 'environment');
     
     try {
       // Skip validation for debugging
@@ -2350,6 +2594,433 @@ ${JSON.stringify(secondaryResults.data, null, 2)}
       };
     } catch (error) {
       throw new Error(`Failed to execute correlation analysis: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  private async listLogSources(args: any) {
+    const { compartmentId, sourceType = 'all', displayName, limit = 100 } = args;
+
+    try {
+      const results = await this.logAnalyticsClient.listLogSources({
+        compartmentId: compartmentId || DEFAULT_COMPARTMENT_ID,
+        sourceType,
+        displayName,
+        limit
+      });
+
+      if (!results.success) {
+        throw new Error(`Failed to list log sources: ${results.error}`);
+      }
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `📚 **OCI Log Sources**
+
+**Total Sources:** ${results.totalCount}
+**Source Type Filter:** ${sourceType}
+**Compartment:** ${compartmentId || DEFAULT_COMPARTMENT_ID}
+
+**Available Log Sources:**
+\`\`\`json
+${JSON.stringify(results.data, null, 2)}
+\`\`\`
+
+*These are the log sources available in your OCI Logging Analytics workspace.*`
+          }
+        ]
+      };
+    } catch (error) {
+      throw new Error(`Failed to list log sources: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  private async getLogSourceDetails(args: any) {
+    const { sourceName, compartmentId } = args;
+
+    try {
+      const results = await this.logAnalyticsClient.getLogSourceDetails({
+        sourceName,
+        compartmentId: compartmentId || DEFAULT_COMPARTMENT_ID
+      });
+
+      if (!results.success) {
+        throw new Error(`Failed to get log source details: ${results.error}`);
+      }
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `📋 **Log Source Details: ${sourceName}**
+
+\`\`\`json
+${JSON.stringify(results.data, null, 2)}
+\`\`\`
+
+*Detailed information about the ${sourceName} log source.*`
+          }
+        ]
+      };
+    } catch (error) {
+      throw new Error(`Failed to get log source details: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  private async listActiveLogSources(args: any) {
+    const { compartmentId, timePeriodMinutes = 60, limit = 100 } = args;
+
+    try {
+      const results = await this.logAnalyticsClient.listActiveLogSources({
+        compartmentId: compartmentId || DEFAULT_COMPARTMENT_ID,
+        timePeriodMinutes,
+        limit
+      });
+
+      if (!results.success) {
+        throw new Error(`Failed to list active log sources: ${results.error}`);
+      }
+
+      // Separate sources with data from those without
+      const activeSources = results.data.filter((s: any) => s.has_data);
+      const inactiveSources = results.data.filter((s: any) => !s.has_data);
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `📊 **OCI Log Sources with Activity**
+
+**Time Period:** Last ${timePeriodMinutes} minutes
+**Total Sources:** ${results.totalCount}
+**Active Sources (with data):** ${activeSources.length}
+**Inactive Sources (no data):** ${inactiveSources.length}
+**Compartment:** ${compartmentId || DEFAULT_COMPARTMENT_ID}
+
+## Active Sources (Sorted by Log Count)
+${activeSources.length > 0 ? activeSources.map((s: any) =>
+  `- **${s.display_name || s.name}**: ${s.log_count.toLocaleString()} logs
+  - Type: ${s.source_type}${s.is_system ? ' (System)' : ' (User)'}
+  - Description: ${s.description || 'N/A'}`
+).join('\n') : '*No active sources in this time period*'}
+
+${inactiveSources.length > 0 ? `
+## Inactive Sources (No Data in Time Period)
+${inactiveSources.slice(0, 10).map((s: any) =>
+  `- ${s.display_name || s.name} (${s.source_type})`
+).join('\n')}
+${inactiveSources.length > 10 ? `\n*...and ${inactiveSources.length - 10} more inactive sources*` : ''}
+` : ''}
+
+*Data combined from OCI Management API and Query API*`
+          }
+        ]
+      };
+    } catch (error) {
+      throw new Error(`Failed to list active log sources: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  private async listLogFields(args: any) {
+    const { fieldType = 'all', isSystem, fieldName, limit = 100 } = args;
+
+    try {
+      const results = await this.logAnalyticsClient.listLogFields({
+        fieldType,
+        isSystem,
+        fieldName,
+        limit
+      });
+
+      if (!results.success) {
+        throw new Error(`Failed to list log fields: ${results.error}`);
+      }
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `🏷️ **OCI Log Analytics Fields**
+
+**Total Fields:** ${results.totalCount}
+**Field Type Filter:** ${fieldType}
+**System Fields:** ${isSystem !== undefined ? (isSystem ? 'Yes' : 'No') : 'All'}
+
+**Available Fields:**
+\`\`\`json
+${JSON.stringify(results.data.slice(0, 50), null, 2)}
+\`\`\`
+
+*These are the fields available for querying in OCI Logging Analytics.*`
+          }
+        ]
+      };
+    } catch (error) {
+      throw new Error(`Failed to list log fields: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  private async getFieldDetails(args: any) {
+    const { fieldName } = args;
+
+    try {
+      const results = await this.logAnalyticsClient.getFieldDetails({
+        fieldName
+      });
+
+      if (!results.success) {
+        throw new Error(`Failed to get field details: ${results.error}`);
+      }
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `📊 **Field Details: ${fieldName}**
+
+\`\`\`json
+${JSON.stringify(results.data, null, 2)}
+\`\`\`
+
+*Detailed information including data type, cardinality, and usage statistics.*`
+          }
+        ]
+      };
+    } catch (error) {
+      throw new Error(`Failed to get field details: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  private async getNamespaceInfo(args: any) {
+    const { includeStorageStats = true } = args;
+
+    try {
+      const results = await this.logAnalyticsClient.getNamespaceInfo({
+        includeStorageStats
+      });
+
+      if (!results.success) {
+        throw new Error(`Failed to get namespace info: ${results.error}`);
+      }
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `🌐 **OCI Logging Analytics Namespace**
+
+**Namespace:** ${results.data[0]?.namespace || 'N/A'}
+**Region:** ${results.data[0]?.region || 'N/A'}
+**Status:** ${results.data[0]?.status || 'ACTIVE'}
+${includeStorageStats ? `**Storage Used:** ${results.data[0]?.storageUsed || 'N/A'}\n**Storage Quota:** ${results.data[0]?.storageQuota || 'N/A'}` : ''}
+
+\`\`\`json
+${JSON.stringify(results.data, null, 2)}
+\`\`\`
+
+*Information about your OCI Logging Analytics workspace.*`
+          }
+        ]
+      };
+    } catch (error) {
+      throw new Error(`Failed to get namespace info: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  private async listEntities(args: any) {
+    const { compartmentId, entityType = 'all', cloudResourceId, limit = 100 } = args;
+
+    try {
+      const results = await this.logAnalyticsClient.listEntities({
+        compartmentId: compartmentId || DEFAULT_COMPARTMENT_ID,
+        entityType,
+        cloudResourceId,
+        limit
+      });
+
+      if (!results.success) {
+        throw new Error(`Failed to list entities: ${results.error}`);
+      }
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `🖥️ **OCI Log Analytics Entities**
+
+**Total Entities:** ${results.totalCount}
+**Entity Type Filter:** ${entityType}
+**Compartment:** ${compartmentId || DEFAULT_COMPARTMENT_ID}
+
+**Available Entities:**
+\`\`\`json
+${JSON.stringify(results.data.slice(0, 20), null, 2)}
+\`\`\`
+
+*These are the monitored entities (hosts, databases, applications) in your environment.*`
+          }
+        ]
+      };
+    } catch (error) {
+      throw new Error(`Failed to list entities: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  private async getStorageUsage(args: any) {
+    const { compartmentId, timeRange = '30d' } = args;
+
+    try {
+      const results = await this.logAnalyticsClient.getStorageUsage({
+        compartmentId: compartmentId || DEFAULT_COMPARTMENT_ID,
+        timeRange
+      });
+
+      if (!results.success) {
+        throw new Error(`Failed to get storage usage: ${results.error}`);
+      }
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `💾 **OCI Logging Analytics Storage Usage**
+
+**Time Range:** ${timeRange}
+**Compartment:** ${compartmentId || DEFAULT_COMPARTMENT_ID}
+**Total Storage:** ${results.data[0]?.totalStorage || 'N/A'}
+**Active Storage:** ${results.data[0]?.activeStorage || 'N/A'}
+**Archived Storage:** ${results.data[0]?.archivedStorage || 'N/A'}
+**Growth Rate:** ${results.data[0]?.growthRate || 'N/A'}
+
+\`\`\`json
+${JSON.stringify(results.data, null, 2)}
+\`\`\`
+
+*Storage usage statistics for your OCI Logging Analytics workspace.*`
+          }
+        ]
+      };
+    } catch (error) {
+      throw new Error(`Failed to get storage usage: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  private async listParsers(args: any) {
+    const { parserType = 'all', displayName, isSystem, limit = 100 } = args;
+
+    try {
+      const results = await this.logAnalyticsClient.listParsers({
+        parserType,
+        displayName,
+        isSystem,
+        limit
+      });
+
+      if (!results.success) {
+        throw new Error(`Failed to list parsers: ${results.error}`);
+      }
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `⚙️ **OCI Log Parsers**
+
+**Total Parsers:** ${results.totalCount}
+**Parser Type Filter:** ${parserType}
+**System Parsers:** ${isSystem !== undefined ? (isSystem ? 'Yes' : 'No') : 'All'}
+
+**Available Parsers:**
+\`\`\`json
+${JSON.stringify(results.data.slice(0, 20), null, 2)}
+\`\`\`
+
+*These are the log parsers available for processing log data.*`
+          }
+        ]
+      };
+    } catch (error) {
+      throw new Error(`Failed to list parsers: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  private async listLabels(args: any) {
+    const { labelType = 'all', displayName, limit = 100 } = args;
+
+    try {
+      const results = await this.logAnalyticsClient.listLabels({
+        labelType,
+        displayName,
+        limit
+      });
+
+      if (!results.success) {
+        throw new Error(`Failed to list labels: ${results.error}`);
+      }
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `🏷️ **OCI Log Analytics Labels**
+
+**Total Labels:** ${results.totalCount}
+**Label Type Filter:** ${labelType}
+
+**Available Labels:**
+\`\`\`json
+${JSON.stringify(results.data, null, 2)}
+\`\`\`
+
+*Labels are used to categorize and organize log data.*`
+          }
+        ]
+      };
+    } catch (error) {
+      throw new Error(`Failed to list labels: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  private async queryRecentUploads(args: any) {
+    const { compartmentId, status = 'all', timeRange = '24h', limit = 50 } = args;
+
+    try {
+      const results = await this.logAnalyticsClient.queryRecentUploads({
+        compartmentId: compartmentId || DEFAULT_COMPARTMENT_ID,
+        status,
+        timeRange,
+        limit
+      });
+
+      if (!results.success) {
+        throw new Error(`Failed to query recent uploads: ${results.error}`);
+      }
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `📤 **Recent Log Uploads**
+
+**Time Range:** ${timeRange}
+**Status Filter:** ${status}
+**Total Uploads:** ${results.totalCount}
+**Successful:** ${results.data.filter((u: any) => u.status === 'SUCCESSFUL').length}
+**Failed:** ${results.data.filter((u: any) => u.status === 'FAILED').length}
+**In Progress:** ${results.data.filter((u: any) => u.status === 'IN_PROGRESS').length}
+
+**Recent Uploads:**
+\`\`\`json
+${JSON.stringify(results.data, null, 2)}
+\`\`\`
+
+*Status of recent log upload operations in OCI Logging Analytics.*`
+          }
+        ]
+      };
+    } catch (error) {
+      throw new Error(`Failed to query recent uploads: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 

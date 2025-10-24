@@ -47,13 +47,13 @@ class OCILoganMCPServer {
             tools: [
                 {
                     name: 'execute_logan_query',
-                    description: 'Execute a Logan Security Dashboard query against OCI Logging Analytics',
+                    description: 'Execute a Logan Security Dashboard query against OCI Logging Analytics with enhanced query language support',
                     inputSchema: {
                         type: 'object',
                         properties: {
                             query: {
                                 type: 'string',
-                                description: 'OCI Logging Analytics query in OCI format'
+                                description: 'OCI Logging Analytics query using pipe-delimited commands (e.g., "Severity = \'error\' | stats count by \'Host Name\'")'
                             },
                             queryName: {
                                 type: 'string',
@@ -62,7 +62,7 @@ class OCILoganMCPServer {
                             timeRange: {
                                 type: 'string',
                                 description: 'Time range for the query (Sysmon/security data recommended: 30d, general queries: 24h)',
-                                enum: ['1h', '6h', '12h', '24h', '1d', '7d', '30d', '1w', '1m'],
+                                enum: ['1h', '6h', '12h', '24h', '1d', '7d', '30d', '1w', '1m', '90d'],
                                 default: '24h'
                             },
                             compartmentId: {
@@ -72,6 +72,11 @@ class OCILoganMCPServer {
                             environment: {
                                 type: 'string',
                                 description: 'Environment name for multi-tenant queries (optional)'
+                            },
+                            timeFilter: {
+                                type: 'string',
+                                description: 'Custom time filter using dateRelative() or toDate() functions (overrides timeRange if provided)',
+                                examples: ['dateRelative(7day)', 'toDate(\'2024-01-01T00:00:00Z\')']
                             }
                         },
                         required: ['query']
@@ -164,7 +169,7 @@ class OCILoganMCPServer {
                             category: {
                                 type: 'string',
                                 description: 'Query category',
-                                enum: ['mitre-attack', 'security', 'network', 'authentication', 'privilege-escalation', 'all']
+                                enum: ['mitre-attack', 'security', 'network', 'authentication', 'privilege-escalation', 'advanced_analytics', 'statistical_analysis', 'compliance_monitoring', 'all']
                             },
                             queryName: {
                                 type: 'string',
@@ -479,6 +484,574 @@ class OCILoganMCPServer {
                         },
                         required: ['dashboardJson']
                     }
+                },
+                {
+                    name: 'execute_advanced_analytics',
+                    description: 'Execute advanced analytics queries using OCI Log Analytics specialized commands',
+                    inputSchema: {
+                        type: 'object',
+                        properties: {
+                            analyticsType: {
+                                type: 'string',
+                                description: 'Type of advanced analytics to perform',
+                                enum: ['cluster', 'link', 'nlp', 'classify', 'outlier', 'sequence', 'geostats', 'timecluster']
+                            },
+                            baseQuery: {
+                                type: 'string',
+                                description: 'Base query to analyze (without analytics command)'
+                            },
+                            parameters: {
+                                type: 'object',
+                                description: 'Parameters specific to the analytics type',
+                                properties: {
+                                    groupBy: {
+                                        type: 'array',
+                                        items: { type: 'string' },
+                                        description: 'Fields to group by for clustering/linking'
+                                    },
+                                    threshold: {
+                                        type: 'number',
+                                        description: 'Threshold value for outlier detection'
+                                    },
+                                    maxClusters: {
+                                        type: 'number',
+                                        description: 'Maximum number of clusters to generate'
+                                    },
+                                    sequencePattern: {
+                                        type: 'string',
+                                        description: 'Pattern for sequence analysis'
+                                    },
+                                    geoFields: {
+                                        type: 'object',
+                                        properties: {
+                                            latitude: { type: 'string' },
+                                            longitude: { type: 'string' }
+                                        },
+                                        description: 'Geographic coordinate fields for geostats'
+                                    }
+                                }
+                            },
+                            timeRange: {
+                                type: 'string',
+                                description: 'Time range for analysis',
+                                enum: ['1h', '6h', '12h', '24h', '1d', '7d', '30d', '1w', '1m', '90d'],
+                                default: '24h'
+                            },
+                            compartmentId: {
+                                type: 'string',
+                                description: 'OCI compartment ID (optional)'
+                            }
+                        },
+                        required: ['analyticsType', 'baseQuery']
+                    }
+                },
+                {
+                    name: 'execute_statistical_analysis',
+                    description: 'Execute statistical analysis using stats, timestats, and eventstats commands',
+                    inputSchema: {
+                        type: 'object',
+                        properties: {
+                            statisticsType: {
+                                type: 'string',
+                                description: 'Type of statistical analysis',
+                                enum: ['stats', 'timestats', 'eventstats', 'top', 'bottom', 'frequent', 'rare']
+                            },
+                            baseQuery: {
+                                type: 'string',
+                                description: 'Base query to analyze statistically'
+                            },
+                            aggregations: {
+                                type: 'array',
+                                items: {
+                                    type: 'object',
+                                    properties: {
+                                        function: {
+                                            type: 'string',
+                                            enum: ['count', 'sum', 'avg', 'min', 'max', 'stdev', 'var', 'distinct_count']
+                                        },
+                                        field: {
+                                            type: 'string',
+                                            description: 'Field to aggregate (optional for count)'
+                                        },
+                                        alias: {
+                                            type: 'string',
+                                            description: 'Alias for the result field'
+                                        }
+                                    },
+                                    required: ['function']
+                                },
+                                description: 'Statistical functions to apply'
+                            },
+                            groupBy: {
+                                type: 'array',
+                                items: { type: 'string' },
+                                description: 'Fields to group by'
+                            },
+                            timeInterval: {
+                                type: 'string',
+                                description: 'Time interval for timestats (e.g., "5m", "1h", "1d")',
+                                examples: ['1m', '5m', '15m', '1h', '6h', '1d']
+                            },
+                            limit: {
+                                type: 'number',
+                                description: 'Maximum number of results for top/bottom/frequent/rare',
+                                default: 10
+                            },
+                            timeRange: {
+                                type: 'string',
+                                description: 'Time range for analysis',
+                                enum: ['1h', '6h', '12h', '24h', '1d', '7d', '30d', '1w', '1m', '90d'],
+                                default: '24h'
+                            },
+                            compartmentId: {
+                                type: 'string',
+                                description: 'OCI compartment ID (optional)'
+                            }
+                        },
+                        required: ['statisticsType', 'baseQuery', 'aggregations']
+                    }
+                },
+                {
+                    name: 'execute_field_operations',
+                    description: 'Execute field manipulation and transformation operations',
+                    inputSchema: {
+                        type: 'object',
+                        properties: {
+                            operation: {
+                                type: 'string',
+                                description: 'Type of field operation',
+                                enum: ['extract', 'eval', 'addfields', 'rename', 'fields', 'dedup', 'bucket']
+                            },
+                            baseQuery: {
+                                type: 'string',
+                                description: 'Base query to apply field operations to'
+                            },
+                            operationDetails: {
+                                type: 'object',
+                                description: 'Details specific to the operation type',
+                                properties: {
+                                    extractPattern: {
+                                        type: 'string',
+                                        description: 'Regex pattern for extract operation'
+                                    },
+                                    evalExpression: {
+                                        type: 'string',
+                                        description: 'Expression for eval operation (e.g., "newField = field1 + field2")'
+                                    },
+                                    fieldList: {
+                                        type: 'array',
+                                        items: { type: 'string' },
+                                        description: 'List of fields for fields/dedup operations'
+                                    },
+                                    renameMapping: {
+                                        type: 'object',
+                                        description: 'Field rename mappings (oldName -> newName)'
+                                    },
+                                    bucketField: {
+                                        type: 'string',
+                                        description: 'Field to bucket for bucket operation'
+                                    },
+                                    bucketRanges: {
+                                        type: 'array',
+                                        items: { type: 'number' },
+                                        description: 'Bucket range values'
+                                    },
+                                    includeFields: {
+                                        type: 'boolean',
+                                        description: 'Include (true) or exclude (false) specified fields',
+                                        default: true
+                                    }
+                                }
+                            },
+                            timeRange: {
+                                type: 'string',
+                                description: 'Time range for operation',
+                                enum: ['1h', '6h', '12h', '24h', '1d', '7d', '30d', '1w', '1m', '90d'],
+                                default: '24h'
+                            },
+                            compartmentId: {
+                                type: 'string',
+                                description: 'OCI compartment ID (optional)'
+                            }
+                        },
+                        required: ['operation', 'baseQuery', 'operationDetails']
+                    }
+                },
+                {
+                    name: 'search_log_patterns',
+                    description: 'Search for specific log patterns using advanced filtering and regex capabilities',
+                    inputSchema: {
+                        type: 'object',
+                        properties: {
+                            logSource: {
+                                type: 'string',
+                                description: 'Specific log source to search in (e.g., "Windows Sysmon Events", "OCI Audit Logs")'
+                            },
+                            pattern: {
+                                type: 'string',
+                                description: 'Search pattern or regex to find'
+                            },
+                            patternType: {
+                                type: 'string',
+                                description: 'Type of pattern search',
+                                enum: ['wildcard', 'regex', 'exact', 'contains']
+                            },
+                            fields: {
+                                type: 'array',
+                                items: { type: 'string' },
+                                description: 'Specific fields to search within'
+                            },
+                            filterCriteria: {
+                                type: 'object',
+                                description: 'Additional filter criteria',
+                                properties: {
+                                    severity: {
+                                        type: 'array',
+                                        items: {
+                                            type: 'string',
+                                            enum: ['fatal', 'error', 'warning', 'info', 'debug', 'trace']
+                                        },
+                                        description: 'Log severity levels to include'
+                                    },
+                                    hostNames: {
+                                        type: 'array',
+                                        items: { type: 'string' },
+                                        description: 'Specific hosts to search'
+                                    },
+                                    ipAddresses: {
+                                        type: 'array',
+                                        items: { type: 'string' },
+                                        description: 'IP addresses to filter by'
+                                    },
+                                    excludePatterns: {
+                                        type: 'array',
+                                        items: { type: 'string' },
+                                        description: 'Patterns to exclude from results'
+                                    }
+                                }
+                            },
+                            timeRange: {
+                                type: 'string',
+                                description: 'Time range for search',
+                                enum: ['1h', '6h', '12h', '24h', '1d', '7d', '30d', '1w', '1m', '90d'],
+                                default: '24h'
+                            },
+                            maxResults: {
+                                type: 'number',
+                                description: 'Maximum number of results to return',
+                                default: 100
+                            },
+                            compartmentId: {
+                                type: 'string',
+                                description: 'OCI compartment ID (optional)'
+                            }
+                        },
+                        required: ['pattern']
+                    }
+                },
+                {
+                    name: 'correlation_analysis',
+                    description: 'Perform log correlation analysis to find related events across different log sources',
+                    inputSchema: {
+                        type: 'object',
+                        properties: {
+                            correlationType: {
+                                type: 'string',
+                                description: 'Type of correlation analysis',
+                                enum: ['temporal', 'entity_based', 'transaction_link', 'sequence_analysis']
+                            },
+                            primaryQuery: {
+                                type: 'string',
+                                description: 'Primary query to correlate from'
+                            },
+                            correlationFields: {
+                                type: 'array',
+                                items: { type: 'string' },
+                                description: 'Fields to use for correlation (e.g., user_id, ip_address, session_id)'
+                            },
+                            timeWindow: {
+                                type: 'string',
+                                description: 'Time window for correlation (e.g., "5m", "1h")',
+                                examples: ['30s', '1m', '5m', '15m', '1h', '2h']
+                            },
+                            secondaryLogSources: {
+                                type: 'array',
+                                items: { type: 'string' },
+                                description: 'Additional log sources to correlate with'
+                            },
+                            threshold: {
+                                type: 'number',
+                                description: 'Minimum correlation score threshold (0.0-1.0)',
+                                minimum: 0.0,
+                                maximum: 1.0,
+                                default: 0.7
+                            },
+                            timeRange: {
+                                type: 'string',
+                                description: 'Overall time range for analysis',
+                                enum: ['1h', '6h', '12h', '24h', '1d', '7d', '30d', '1w', '1m'],
+                                default: '24h'
+                            },
+                            compartmentId: {
+                                type: 'string',
+                                description: 'OCI compartment ID (optional)'
+                            }
+                        },
+                        required: ['correlationType', 'primaryQuery', 'correlationFields']
+                    }
+                },
+                {
+                    name: 'list_log_sources',
+                    description: 'List available log sources in OCI Logging Analytics',
+                    inputSchema: {
+                        type: 'object',
+                        properties: {
+                            compartmentId: {
+                                type: 'string',
+                                description: 'OCI compartment ID (uses default if not provided)'
+                            },
+                            sourceType: {
+                                type: 'string',
+                                description: 'Filter by source type',
+                                enum: ['ENTITY', 'SYSTEM', 'USER_DEFINED', 'all']
+                            },
+                            displayName: {
+                                type: 'string',
+                                description: 'Filter by display name (partial match)'
+                            },
+                            limit: {
+                                type: 'number',
+                                description: 'Maximum number of sources to return',
+                                default: 100
+                            }
+                        }
+                    }
+                },
+                {
+                    name: 'get_log_source_details',
+                    description: 'Get detailed information about a specific log source',
+                    inputSchema: {
+                        type: 'object',
+                        properties: {
+                            sourceName: {
+                                type: 'string',
+                                description: 'Name of the log source to query'
+                            },
+                            compartmentId: {
+                                type: 'string',
+                                description: 'OCI compartment ID (optional)'
+                            }
+                        },
+                        required: ['sourceName']
+                    }
+                },
+                {
+                    name: 'list_active_log_sources',
+                    description: 'List all log sources with their actual log counts. Shows which sources have data and how many logs each contains. Combines Management API (for complete source list) with Query API (for log counts).',
+                    inputSchema: {
+                        type: 'object',
+                        properties: {
+                            compartmentId: {
+                                type: 'string',
+                                description: 'OCI compartment ID (uses default from environment if not provided)'
+                            },
+                            timePeriodMinutes: {
+                                type: 'number',
+                                description: 'Time period to count logs (in minutes)',
+                                default: 60
+                            },
+                            limit: {
+                                type: 'number',
+                                description: 'Maximum number of sources to return',
+                                default: 100
+                            }
+                        }
+                    }
+                },
+                {
+                    name: 'list_log_fields',
+                    description: 'List available fields in OCI Logging Analytics',
+                    inputSchema: {
+                        type: 'object',
+                        properties: {
+                            fieldType: {
+                                type: 'string',
+                                description: 'Filter by field type',
+                                enum: ['FACET', 'DIMENSION', 'METRIC', 'TABLE_FIELD', 'all'],
+                                default: 'all'
+                            },
+                            isSystem: {
+                                type: 'boolean',
+                                description: 'Filter system vs user-defined fields'
+                            },
+                            fieldName: {
+                                type: 'string',
+                                description: 'Search by field name (partial match)'
+                            },
+                            limit: {
+                                type: 'number',
+                                description: 'Maximum number of fields to return',
+                                default: 100
+                            }
+                        }
+                    }
+                },
+                {
+                    name: 'get_field_details',
+                    description: 'Get detailed information about a specific field including data type and cardinality',
+                    inputSchema: {
+                        type: 'object',
+                        properties: {
+                            fieldName: {
+                                type: 'string',
+                                description: 'Name of the field to query'
+                            }
+                        },
+                        required: ['fieldName']
+                    }
+                },
+                {
+                    name: 'get_namespace_info',
+                    description: 'Get information about the OCI Logging Analytics namespace',
+                    inputSchema: {
+                        type: 'object',
+                        properties: {
+                            includeStorageStats: {
+                                type: 'boolean',
+                                description: 'Include storage usage statistics',
+                                default: true
+                            }
+                        }
+                    }
+                },
+                {
+                    name: 'list_entities',
+                    description: 'List entities (hosts, services, applications) in OCI Logging Analytics',
+                    inputSchema: {
+                        type: 'object',
+                        properties: {
+                            compartmentId: {
+                                type: 'string',
+                                description: 'OCI compartment ID (uses default if not provided)'
+                            },
+                            entityType: {
+                                type: 'string',
+                                description: 'Filter by entity type',
+                                enum: ['HOST', 'DATABASE', 'APPLICATION', 'WEBSERVER', 'all'],
+                                default: 'all'
+                            },
+                            cloudResourceId: {
+                                type: 'string',
+                                description: 'Filter by cloud resource ID'
+                            },
+                            limit: {
+                                type: 'number',
+                                description: 'Maximum number of entities to return',
+                                default: 100
+                            }
+                        }
+                    }
+                },
+                {
+                    name: 'get_storage_usage',
+                    description: 'Get storage usage statistics for OCI Logging Analytics',
+                    inputSchema: {
+                        type: 'object',
+                        properties: {
+                            compartmentId: {
+                                type: 'string',
+                                description: 'OCI compartment ID (uses default if not provided)'
+                            },
+                            timeRange: {
+                                type: 'string',
+                                description: 'Time range for usage statistics',
+                                enum: ['7d', '30d', '90d'],
+                                default: '30d'
+                            }
+                        }
+                    }
+                },
+                {
+                    name: 'list_parsers',
+                    description: 'List available log parsers in OCI Logging Analytics',
+                    inputSchema: {
+                        type: 'object',
+                        properties: {
+                            parserType: {
+                                type: 'string',
+                                description: 'Filter by parser type',
+                                enum: ['REGEX', 'XML', 'JSON', 'DELIMITED', 'all'],
+                                default: 'all'
+                            },
+                            displayName: {
+                                type: 'string',
+                                description: 'Search by parser name (partial match)'
+                            },
+                            isSystem: {
+                                type: 'boolean',
+                                description: 'Filter system vs user-defined parsers'
+                            },
+                            limit: {
+                                type: 'number',
+                                description: 'Maximum number of parsers to return',
+                                default: 100
+                            }
+                        }
+                    }
+                },
+                {
+                    name: 'list_labels',
+                    description: 'List available labels in OCI Logging Analytics for log categorization',
+                    inputSchema: {
+                        type: 'object',
+                        properties: {
+                            labelType: {
+                                type: 'string',
+                                description: 'Filter by label type',
+                                enum: ['PRIORITY', 'PROBLEM', 'all'],
+                                default: 'all'
+                            },
+                            displayName: {
+                                type: 'string',
+                                description: 'Search by label name (partial match)'
+                            },
+                            limit: {
+                                type: 'number',
+                                description: 'Maximum number of labels to return',
+                                default: 100
+                            }
+                        }
+                    }
+                },
+                {
+                    name: 'query_recent_uploads',
+                    description: 'Query recent log uploads and their status in OCI Logging Analytics',
+                    inputSchema: {
+                        type: 'object',
+                        properties: {
+                            compartmentId: {
+                                type: 'string',
+                                description: 'OCI compartment ID (uses default if not provided)'
+                            },
+                            status: {
+                                type: 'string',
+                                description: 'Filter by upload status',
+                                enum: ['IN_PROGRESS', 'SUCCESSFUL', 'FAILED', 'all'],
+                                default: 'all'
+                            },
+                            timeRange: {
+                                type: 'string',
+                                description: 'Time range to check',
+                                enum: ['1h', '6h', '24h', '7d'],
+                                default: '24h'
+                            },
+                            limit: {
+                                type: 'number',
+                                description: 'Maximum number of uploads to return',
+                                default: 50
+                            }
+                        }
+                    }
                 }
             ]
         }));
@@ -531,6 +1104,38 @@ class OCILoganMCPServer {
                         return await this.exportDashboard(args);
                     case 'import_dashboard':
                         return await this.importDashboard(args);
+                    case 'execute_advanced_analytics':
+                        return await this.executeAdvancedAnalytics(args);
+                    case 'execute_statistical_analysis':
+                        return await this.executeStatisticalAnalysis(args);
+                    case 'execute_field_operations':
+                        return await this.executeFieldOperations(args);
+                    case 'search_log_patterns':
+                        return await this.searchLogPatterns(args);
+                    case 'correlation_analysis':
+                        return await this.correlationAnalysis(args);
+                    case 'list_log_sources':
+                        return await this.listLogSources(args);
+                    case 'get_log_source_details':
+                        return await this.getLogSourceDetails(args);
+                    case 'list_active_log_sources':
+                        return await this.listActiveLogSources(args);
+                    case 'list_log_fields':
+                        return await this.listLogFields(args);
+                    case 'get_field_details':
+                        return await this.getFieldDetails(args);
+                    case 'get_namespace_info':
+                        return await this.getNamespaceInfo(args);
+                    case 'list_entities':
+                        return await this.listEntities(args);
+                    case 'get_storage_usage':
+                        return await this.getStorageUsage(args);
+                    case 'list_parsers':
+                        return await this.listParsers(args);
+                    case 'list_labels':
+                        return await this.listLabels(args);
+                    case 'query_recent_uploads':
+                        return await this.queryRecentUploads(args);
                     default:
                         throw new Error(`Unknown tool: ${name}`);
                 }
@@ -588,41 +1193,10 @@ class OCILoganMCPServer {
         catch (e) {
             console.error('Failed to write execute debug log:', e);
         }
-        // Handle compartment selection
+        // Handle compartment selection - use provided or default from environment
         const compartmentId = providedCompartmentId || DEFAULT_COMPARTMENT_ID;
-        if (!providedCompartmentId) {
-            return {
-                content: [
-                    {
-                        type: 'text',
-                        text: `❓ **Compartment Selection Required**
-
-**Current Query:** ${query}
-**Time Range:** ${timeRange}
-
-**Please specify which OCI compartment to query against.**
-
-**Usage Example:**
-\`\`\`json
-{
-  "query": "${query}",
-  "queryName": "${queryName || 'Custom Query'}",
-  "timeRange": "${timeRange}",
-  "compartmentId": "${EXAMPLE_COMPARTMENT_ID}"
-}
-\`\`\`
-
-**Default Compartment Available:**
-- Production Environment: \`${EXAMPLE_COMPARTMENT_ID}\`
-
-**To execute with default compartment, run:**
-execute_logan_query with compartmentId: "${EXAMPLE_COMPARTMENT_ID}"
-
-*Different compartments may contain different log sources and data volumes.*`
-                    }
-                ]
-            };
-        }
+        // Log which compartment we're using
+        console.error('MCP DEBUG: Using compartment:', compartmentId, 'from', providedCompartmentId ? 'user' : 'environment');
         try {
             // Skip validation for debugging
             console.error('MCP DEBUG: Skipping validation for debugging...');
@@ -1380,6 +1954,835 @@ ${exportJson}
         }
         catch (error) {
             throw new Error(`Failed to import dashboard: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    }
+    async executeAdvancedAnalytics(args) {
+        const { analyticsType, baseQuery, parameters = {}, timeRange = '24h', compartmentId } = args;
+        try {
+            let analyticsQuery = baseQuery;
+            // Add time filter if not already present
+            if (!baseQuery.includes('Time >') && !baseQuery.includes('dateRelative')) {
+                const timeFilter = this.buildTimeFilter(timeRange);
+                analyticsQuery = `${baseQuery} ${timeFilter}`;
+            }
+            // Build the analytics command based on type
+            let analyticsCommand = '';
+            switch (analyticsType) {
+                case 'cluster':
+                    const groupByFields = parameters.groupBy ? parameters.groupBy.join(', ') : '*';
+                    const maxClusters = parameters.maxClusters || 10;
+                    analyticsCommand = `cluster maxclusters=${maxClusters} t=0.8 field=${groupByFields}`;
+                    break;
+                case 'link':
+                    const linkFields = parameters.groupBy ? parameters.groupBy.join(', ') : 'Host';
+                    analyticsCommand = `link ${linkFields}`;
+                    break;
+                case 'nlp':
+                    analyticsCommand = 'nlp';
+                    break;
+                case 'classify':
+                    analyticsCommand = 'classify';
+                    break;
+                case 'outlier':
+                    const threshold = parameters.threshold || 2;
+                    analyticsCommand = `outlier threshold=${threshold}`;
+                    break;
+                case 'sequence':
+                    const pattern = parameters.sequencePattern || 'default';
+                    analyticsCommand = `sequence ${pattern}`;
+                    break;
+                case 'geostats':
+                    const geoFields = parameters.geoFields || { latitude: 'lat', longitude: 'lon' };
+                    analyticsCommand = `geostats latfield=${geoFields.latitude} longfield=${geoFields.longitude}`;
+                    break;
+                case 'timecluster':
+                    analyticsCommand = 'timecluster';
+                    break;
+                default:
+                    throw new Error(`Unsupported analytics type: ${analyticsType}`);
+            }
+            const fullQuery = `${analyticsQuery} | ${analyticsCommand}`;
+            const results = await this.logAnalyticsClient.executeQuery({
+                query: fullQuery,
+                timeRange,
+                compartmentId
+            });
+            if (!results.success) {
+                throw new Error(`Advanced analytics failed: ${results.error}`);
+            }
+            return {
+                content: [
+                    {
+                        type: 'text',
+                        text: `🔬 **Advanced Analytics Results**
+
+**Analytics Type:** ${analyticsType}
+**Base Query:** ${baseQuery}
+**Time Range:** ${timeRange}
+**Parameters:** ${JSON.stringify(parameters, null, 2)}
+**Results Found:** ${results.totalCount}
+**Execution Time:** ${results.executionTime}ms
+
+**Analytics Results:**
+\`\`\`json
+${JSON.stringify(results.data, null, 2)}
+\`\`\`
+
+*Advanced analytics performed using OCI Log Analytics ${analyticsType} capabilities.*`
+                    }
+                ]
+            };
+        }
+        catch (error) {
+            throw new Error(`Failed to execute advanced analytics: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    }
+    async executeStatisticalAnalysis(args) {
+        const { statisticsType, baseQuery, aggregations, groupBy = [], timeInterval, limit = 10, timeRange = '24h', compartmentId } = args;
+        try {
+            let statisticsQuery = baseQuery;
+            // Add time filter if not already present
+            if (!baseQuery.includes('Time >') && !baseQuery.includes('dateRelative')) {
+                const timeFilter = this.buildTimeFilter(timeRange);
+                statisticsQuery = `${baseQuery} ${timeFilter}`;
+            }
+            // Build aggregation functions
+            const aggFunctions = aggregations.map((agg) => {
+                const func = agg.function;
+                const field = agg.field ? ` ${agg.field}` : '';
+                const alias = agg.alias ? ` as '${agg.alias}'` : '';
+                return `${func}(${field})${alias}`;
+            }).join(', ');
+            // Build statistical command
+            let statsCommand = '';
+            switch (statisticsType) {
+                case 'stats':
+                    const groupByClause = groupBy.length > 0 ? ` by ${groupBy.map(f => `'${f}'`).join(', ')}` : '';
+                    statsCommand = `stats ${aggFunctions}${groupByClause}`;
+                    break;
+                case 'timestats':
+                    const interval = timeInterval || '1h';
+                    const groupByTime = groupBy.length > 0 ? `, ${groupBy.map(f => `'${f}'`).join(', ')}` : '';
+                    statsCommand = `timestats ${interval} ${aggFunctions}${groupByTime}`;
+                    break;
+                case 'eventstats':
+                    const eventGroupBy = groupBy.length > 0 ? ` by ${groupBy.map(f => `'${f}'`).join(', ')}` : '';
+                    statsCommand = `eventstats ${aggFunctions}${eventGroupBy}`;
+                    break;
+                case 'top':
+                case 'bottom':
+                case 'frequent':
+                case 'rare':
+                    const field = groupBy[0] || aggregations[0]?.field || 'Host';
+                    statsCommand = `${statisticsType} ${limit} '${field}'`;
+                    break;
+                default:
+                    throw new Error(`Unsupported statistics type: ${statisticsType}`);
+            }
+            const fullQuery = `${statisticsQuery} | ${statsCommand}`;
+            const results = await this.logAnalyticsClient.executeQuery({
+                query: fullQuery,
+                timeRange,
+                compartmentId
+            });
+            if (!results.success) {
+                throw new Error(`Statistical analysis failed: ${results.error}`);
+            }
+            return {
+                content: [
+                    {
+                        type: 'text',
+                        text: `📊 **Statistical Analysis Results**
+
+**Statistics Type:** ${statisticsType}
+**Base Query:** ${baseQuery}
+**Aggregations:** ${JSON.stringify(aggregations, null, 2)}
+**Group By:** ${groupBy.join(', ') || 'None'}
+**Time Range:** ${timeRange}
+**Results Found:** ${results.totalCount}
+**Execution Time:** ${results.executionTime}ms
+
+**Statistical Results:**
+\`\`\`json
+${JSON.stringify(results.data, null, 2)}
+\`\`\`
+
+*Statistical analysis performed using OCI Log Analytics ${statisticsType} command.*`
+                    }
+                ]
+            };
+        }
+        catch (error) {
+            throw new Error(`Failed to execute statistical analysis: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    }
+    async executeFieldOperations(args) {
+        const { operation, baseQuery, operationDetails, timeRange = '24h', compartmentId } = args;
+        try {
+            let operationQuery = baseQuery;
+            // Add time filter if not already present
+            if (!baseQuery.includes('Time >') && !baseQuery.includes('dateRelative')) {
+                const timeFilter = this.buildTimeFilter(timeRange);
+                operationQuery = `${baseQuery} ${timeFilter}`;
+            }
+            // Build operation command
+            let operationCommand = '';
+            switch (operation) {
+                case 'extract':
+                    const pattern = operationDetails.extractPattern;
+                    operationCommand = `extract ${pattern}`;
+                    break;
+                case 'eval':
+                    const expression = operationDetails.evalExpression;
+                    operationCommand = `eval ${expression}`;
+                    break;
+                case 'addfields':
+                    const addExpression = operationDetails.evalExpression || 'newField = 1';
+                    operationCommand = `addfields ${addExpression}`;
+                    break;
+                case 'rename':
+                    const renameMapping = operationDetails.renameMapping || {};
+                    const renamePairs = Object.entries(renameMapping).map(([old, new_]) => `'${old}' AS '${new_}'`).join(', ');
+                    operationCommand = `rename ${renamePairs}`;
+                    break;
+                case 'fields':
+                    const fieldList = operationDetails.fieldList || [];
+                    const include = operationDetails.includeFields !== false;
+                    const fieldsStr = fieldList.map(f => `'${f}'`).join(', ');
+                    operationCommand = `fields ${include ? '' : '- '}${fieldsStr}`;
+                    break;
+                case 'dedup':
+                    const dedupFields = operationDetails.fieldList || ['Host'];
+                    const dedupStr = dedupFields.map(f => `'${f}'`).join(', ');
+                    operationCommand = `dedup ${dedupStr}`;
+                    break;
+                case 'bucket':
+                    const bucketField = operationDetails.bucketField || 'value';
+                    const ranges = operationDetails.bucketRanges || [0, 10, 100, 1000];
+                    operationCommand = `bucket '${bucketField}' [${ranges.join(', ')}]`;
+                    break;
+                default:
+                    throw new Error(`Unsupported field operation: ${operation}`);
+            }
+            const fullQuery = `${operationQuery} | ${operationCommand}`;
+            const results = await this.logAnalyticsClient.executeQuery({
+                query: fullQuery,
+                timeRange,
+                compartmentId
+            });
+            if (!results.success) {
+                throw new Error(`Field operation failed: ${results.error}`);
+            }
+            return {
+                content: [
+                    {
+                        type: 'text',
+                        text: `🔧 **Field Operation Results**
+
+**Operation:** ${operation}
+**Base Query:** ${baseQuery}
+**Operation Details:** ${JSON.stringify(operationDetails, null, 2)}
+**Time Range:** ${timeRange}
+**Results Found:** ${results.totalCount}
+**Execution Time:** ${results.executionTime}ms
+
+**Operation Results:**
+\`\`\`json
+${JSON.stringify(results.data, null, 2)}
+\`\`\`
+
+*Field operation performed using OCI Log Analytics ${operation} command.*`
+                    }
+                ]
+            };
+        }
+        catch (error) {
+            throw new Error(`Failed to execute field operation: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    }
+    async searchLogPatterns(args) {
+        const { logSource, pattern, patternType = 'contains', fields = [], filterCriteria = {}, timeRange = '24h', maxResults = 100, compartmentId } = args;
+        try {
+            // Build base query with log source filter
+            let query = '';
+            if (logSource) {
+                query = `'Log Source' = '${logSource}'`;
+            }
+            // Add pattern search based on type
+            let patternClause = '';
+            switch (patternType) {
+                case 'wildcard':
+                    patternClause = fields.length > 0
+                        ? fields.map(f => `'${f}' LIKE '${pattern}'`).join(' OR ')
+                        : `* LIKE '${pattern}'`;
+                    break;
+                case 'regex':
+                    patternClause = fields.length > 0
+                        ? fields.map(f => `'${f}' matches '${pattern}'`).join(' OR ')
+                        : `* matches '${pattern}'`;
+                    break;
+                case 'exact':
+                    patternClause = fields.length > 0
+                        ? fields.map(f => `'${f}' = '${pattern}'`).join(' OR ')
+                        : `* = '${pattern}'`;
+                    break;
+                case 'contains':
+                    patternClause = fields.length > 0
+                        ? fields.map(f => `'${f}' LIKE '%${pattern}%'`).join(' OR ')
+                        : `* LIKE '%${pattern}%'`;
+                    break;
+                default:
+                    patternClause = `* LIKE '%${pattern}%'`;
+            }
+            // Combine query parts
+            if (query && patternClause) {
+                query = `${query} AND (${patternClause})`;
+            }
+            else if (patternClause) {
+                query = patternClause;
+            }
+            // Add filter criteria
+            const filters = [];
+            if (filterCriteria.severity && filterCriteria.severity.length > 0) {
+                const severityFilter = filterCriteria.severity.map(s => `'${s}'`).join(', ');
+                filters.push(`Severity IN (${severityFilter})`);
+            }
+            if (filterCriteria.hostNames && filterCriteria.hostNames.length > 0) {
+                const hostFilter = filterCriteria.hostNames.map(h => `'${h}'`).join(', ');
+                filters.push(`'Host Name' IN (${hostFilter})`);
+            }
+            if (filterCriteria.ipAddresses && filterCriteria.ipAddresses.length > 0) {
+                const ipFilter = filterCriteria.ipAddresses.map(ip => `'${ip}'`).join(', ');
+                filters.push(`('Source IP' IN (${ipFilter}) OR 'Destination IP' IN (${ipFilter}))`);
+            }
+            if (filters.length > 0) {
+                query = `${query} AND ${filters.join(' AND ')}`;
+            }
+            // Add exclude patterns
+            if (filterCriteria.excludePatterns && filterCriteria.excludePatterns.length > 0) {
+                const excludeFilters = filterCriteria.excludePatterns.map(p => `NOT (* LIKE '%${p}%')`).join(' AND ');
+                query = `${query} AND ${excludeFilters}`;
+            }
+            // Add time filter
+            const timeFilter = this.buildTimeFilter(timeRange);
+            query = `${query} ${timeFilter}`;
+            // Add head limit
+            const fullQuery = `${query} | head ${maxResults}`;
+            const results = await this.logAnalyticsClient.executeQuery({
+                query: fullQuery,
+                timeRange,
+                compartmentId
+            });
+            if (!results.success) {
+                throw new Error(`Pattern search failed: ${results.error}`);
+            }
+            return {
+                content: [
+                    {
+                        type: 'text',
+                        text: `🔍 **Log Pattern Search Results**
+
+**Pattern:** ${pattern}
+**Pattern Type:** ${patternType}
+**Log Source:** ${logSource || 'All Sources'}
+**Search Fields:** ${fields.join(', ') || 'All Fields'}
+**Time Range:** ${timeRange}
+**Max Results:** ${maxResults}
+**Results Found:** ${results.totalCount}
+**Execution Time:** ${results.executionTime}ms
+
+**Pattern Matches:**
+\`\`\`json
+${JSON.stringify(results.data, null, 2)}
+\`\`\`
+
+*Pattern search performed using OCI Log Analytics with ${patternType} matching.*`
+                    }
+                ]
+            };
+        }
+        catch (error) {
+            throw new Error(`Failed to search log patterns: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    }
+    async correlationAnalysis(args) {
+        const { correlationType, primaryQuery, correlationFields, timeWindow = '5m', secondaryLogSources = [], threshold = 0.7, timeRange = '24h', compartmentId } = args;
+        try {
+            let correlationQuery = primaryQuery;
+            // Add time filter if not already present
+            if (!primaryQuery.includes('Time >') && !primaryQuery.includes('dateRelative')) {
+                const timeFilter = this.buildTimeFilter(timeRange);
+                correlationQuery = `${primaryQuery} ${timeFilter}`;
+            }
+            // Build correlation command based on type
+            let correlationCommand = '';
+            const fieldsList = correlationFields.map(f => `'${f}'`).join(', ');
+            switch (correlationType) {
+                case 'temporal':
+                    correlationCommand = `link maxspan=${timeWindow} ${fieldsList}`;
+                    break;
+                case 'entity_based':
+                    correlationCommand = `cluster field=${fieldsList} t=${threshold}`;
+                    break;
+                case 'transaction_link':
+                    correlationCommand = `link startswith="${primaryQuery}" endswith="*" ${fieldsList}`;
+                    break;
+                case 'sequence_analysis':
+                    correlationCommand = `sequence ${fieldsList}`;
+                    break;
+                default:
+                    // Default to basic linking
+                    correlationCommand = `link ${fieldsList}`;
+            }
+            const fullQuery = `${correlationQuery} | ${correlationCommand}`;
+            const results = await this.logAnalyticsClient.executeQuery({
+                query: fullQuery,
+                timeRange,
+                compartmentId
+            });
+            if (!results.success) {
+                throw new Error(`Correlation analysis failed: ${results.error}`);
+            }
+            // If secondary log sources are specified, perform additional correlation
+            let secondaryResults = null;
+            if (secondaryLogSources.length > 0) {
+                const secondaryQueries = secondaryLogSources.map(source => `'Log Source' = '${source}' AND (${correlationFields.map(f => `'${f}' != ''`).join(' OR ')})`);
+                for (const secQuery of secondaryQueries) {
+                    const secTimeFilter = this.buildTimeFilter(timeRange);
+                    const secFullQuery = `${secQuery} ${secTimeFilter} | ${correlationCommand}`;
+                    const secResult = await this.logAnalyticsClient.executeQuery({
+                        query: secFullQuery,
+                        timeRange,
+                        compartmentId
+                    });
+                    if (secResult.success) {
+                        secondaryResults = secResult;
+                        break;
+                    }
+                }
+            }
+            return {
+                content: [
+                    {
+                        type: 'text',
+                        text: `🔗 **Correlation Analysis Results**
+
+**Correlation Type:** ${correlationType}
+**Primary Query:** ${primaryQuery}
+**Correlation Fields:** ${correlationFields.join(', ')}
+**Time Window:** ${timeWindow}
+**Threshold:** ${threshold}
+**Time Range:** ${timeRange}
+**Primary Results:** ${results.totalCount}
+**Secondary Results:** ${secondaryResults?.totalCount || 'N/A'}
+**Execution Time:** ${results.executionTime}ms
+
+**Primary Correlation Results:**
+\`\`\`json
+${JSON.stringify(results.data, null, 2)}
+\`\`\`
+
+${secondaryResults ? `**Secondary Correlation Results:**
+\`\`\`json
+${JSON.stringify(secondaryResults.data, null, 2)}
+\`\`\`` : ''}
+
+*Correlation analysis performed using OCI Log Analytics ${correlationType} capabilities.*`
+                    }
+                ]
+            };
+        }
+        catch (error) {
+            throw new Error(`Failed to execute correlation analysis: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    }
+    async listLogSources(args) {
+        const { compartmentId, sourceType = 'all', displayName, limit = 100 } = args;
+        try {
+            const results = await this.logAnalyticsClient.listLogSources({
+                compartmentId: compartmentId || DEFAULT_COMPARTMENT_ID,
+                sourceType,
+                displayName,
+                limit
+            });
+            if (!results.success) {
+                throw new Error(`Failed to list log sources: ${results.error}`);
+            }
+            return {
+                content: [
+                    {
+                        type: 'text',
+                        text: `📚 **OCI Log Sources**
+
+**Total Sources:** ${results.totalCount}
+**Source Type Filter:** ${sourceType}
+**Compartment:** ${compartmentId || DEFAULT_COMPARTMENT_ID}
+
+**Available Log Sources:**
+\`\`\`json
+${JSON.stringify(results.data, null, 2)}
+\`\`\`
+
+*These are the log sources available in your OCI Logging Analytics workspace.*`
+                    }
+                ]
+            };
+        }
+        catch (error) {
+            throw new Error(`Failed to list log sources: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    }
+    async getLogSourceDetails(args) {
+        const { sourceName, compartmentId } = args;
+        try {
+            const results = await this.logAnalyticsClient.getLogSourceDetails({
+                sourceName,
+                compartmentId: compartmentId || DEFAULT_COMPARTMENT_ID
+            });
+            if (!results.success) {
+                throw new Error(`Failed to get log source details: ${results.error}`);
+            }
+            return {
+                content: [
+                    {
+                        type: 'text',
+                        text: `📋 **Log Source Details: ${sourceName}**
+
+\`\`\`json
+${JSON.stringify(results.data, null, 2)}
+\`\`\`
+
+*Detailed information about the ${sourceName} log source.*`
+                    }
+                ]
+            };
+        }
+        catch (error) {
+            throw new Error(`Failed to get log source details: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    }
+    async listActiveLogSources(args) {
+        const { compartmentId, timePeriodMinutes = 60, limit = 100 } = args;
+        try {
+            const results = await this.logAnalyticsClient.listActiveLogSources({
+                compartmentId: compartmentId || DEFAULT_COMPARTMENT_ID,
+                timePeriodMinutes,
+                limit
+            });
+            if (!results.success) {
+                throw new Error(`Failed to list active log sources: ${results.error}`);
+            }
+            // Separate sources with data from those without
+            const activeSources = results.data.filter((s) => s.has_data);
+            const inactiveSources = results.data.filter((s) => !s.has_data);
+            return {
+                content: [
+                    {
+                        type: 'text',
+                        text: `📊 **OCI Log Sources with Activity**
+
+**Time Period:** Last ${timePeriodMinutes} minutes
+**Total Sources:** ${results.totalCount}
+**Active Sources (with data):** ${activeSources.length}
+**Inactive Sources (no data):** ${inactiveSources.length}
+**Compartment:** ${compartmentId || DEFAULT_COMPARTMENT_ID}
+
+## Active Sources (Sorted by Log Count)
+${activeSources.length > 0 ? activeSources.map((s) => `- **${s.display_name || s.name}**: ${s.log_count.toLocaleString()} logs
+  - Type: ${s.source_type}${s.is_system ? ' (System)' : ' (User)'}
+  - Description: ${s.description || 'N/A'}`).join('\n') : '*No active sources in this time period*'}
+
+${inactiveSources.length > 0 ? `
+## Inactive Sources (No Data in Time Period)
+${inactiveSources.slice(0, 10).map((s) => `- ${s.display_name || s.name} (${s.source_type})`).join('\n')}
+${inactiveSources.length > 10 ? `\n*...and ${inactiveSources.length - 10} more inactive sources*` : ''}
+` : ''}
+
+*Data combined from OCI Management API and Query API*`
+                    }
+                ]
+            };
+        }
+        catch (error) {
+            throw new Error(`Failed to list active log sources: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    }
+    async listLogFields(args) {
+        const { fieldType = 'all', isSystem, fieldName, limit = 100 } = args;
+        try {
+            const results = await this.logAnalyticsClient.listLogFields({
+                fieldType,
+                isSystem,
+                fieldName,
+                limit
+            });
+            if (!results.success) {
+                throw new Error(`Failed to list log fields: ${results.error}`);
+            }
+            return {
+                content: [
+                    {
+                        type: 'text',
+                        text: `🏷️ **OCI Log Analytics Fields**
+
+**Total Fields:** ${results.totalCount}
+**Field Type Filter:** ${fieldType}
+**System Fields:** ${isSystem !== undefined ? (isSystem ? 'Yes' : 'No') : 'All'}
+
+**Available Fields:**
+\`\`\`json
+${JSON.stringify(results.data.slice(0, 50), null, 2)}
+\`\`\`
+
+*These are the fields available for querying in OCI Logging Analytics.*`
+                    }
+                ]
+            };
+        }
+        catch (error) {
+            throw new Error(`Failed to list log fields: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    }
+    async getFieldDetails(args) {
+        const { fieldName } = args;
+        try {
+            const results = await this.logAnalyticsClient.getFieldDetails({
+                fieldName
+            });
+            if (!results.success) {
+                throw new Error(`Failed to get field details: ${results.error}`);
+            }
+            return {
+                content: [
+                    {
+                        type: 'text',
+                        text: `📊 **Field Details: ${fieldName}**
+
+\`\`\`json
+${JSON.stringify(results.data, null, 2)}
+\`\`\`
+
+*Detailed information including data type, cardinality, and usage statistics.*`
+                    }
+                ]
+            };
+        }
+        catch (error) {
+            throw new Error(`Failed to get field details: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    }
+    async getNamespaceInfo(args) {
+        const { includeStorageStats = true } = args;
+        try {
+            const results = await this.logAnalyticsClient.getNamespaceInfo({
+                includeStorageStats
+            });
+            if (!results.success) {
+                throw new Error(`Failed to get namespace info: ${results.error}`);
+            }
+            return {
+                content: [
+                    {
+                        type: 'text',
+                        text: `🌐 **OCI Logging Analytics Namespace**
+
+**Namespace:** ${results.data[0]?.namespace || 'N/A'}
+**Region:** ${results.data[0]?.region || 'N/A'}
+**Status:** ${results.data[0]?.status || 'ACTIVE'}
+${includeStorageStats ? `**Storage Used:** ${results.data[0]?.storageUsed || 'N/A'}\n**Storage Quota:** ${results.data[0]?.storageQuota || 'N/A'}` : ''}
+
+\`\`\`json
+${JSON.stringify(results.data, null, 2)}
+\`\`\`
+
+*Information about your OCI Logging Analytics workspace.*`
+                    }
+                ]
+            };
+        }
+        catch (error) {
+            throw new Error(`Failed to get namespace info: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    }
+    async listEntities(args) {
+        const { compartmentId, entityType = 'all', cloudResourceId, limit = 100 } = args;
+        try {
+            const results = await this.logAnalyticsClient.listEntities({
+                compartmentId: compartmentId || DEFAULT_COMPARTMENT_ID,
+                entityType,
+                cloudResourceId,
+                limit
+            });
+            if (!results.success) {
+                throw new Error(`Failed to list entities: ${results.error}`);
+            }
+            return {
+                content: [
+                    {
+                        type: 'text',
+                        text: `🖥️ **OCI Log Analytics Entities**
+
+**Total Entities:** ${results.totalCount}
+**Entity Type Filter:** ${entityType}
+**Compartment:** ${compartmentId || DEFAULT_COMPARTMENT_ID}
+
+**Available Entities:**
+\`\`\`json
+${JSON.stringify(results.data.slice(0, 20), null, 2)}
+\`\`\`
+
+*These are the monitored entities (hosts, databases, applications) in your environment.*`
+                    }
+                ]
+            };
+        }
+        catch (error) {
+            throw new Error(`Failed to list entities: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    }
+    async getStorageUsage(args) {
+        const { compartmentId, timeRange = '30d' } = args;
+        try {
+            const results = await this.logAnalyticsClient.getStorageUsage({
+                compartmentId: compartmentId || DEFAULT_COMPARTMENT_ID,
+                timeRange
+            });
+            if (!results.success) {
+                throw new Error(`Failed to get storage usage: ${results.error}`);
+            }
+            return {
+                content: [
+                    {
+                        type: 'text',
+                        text: `💾 **OCI Logging Analytics Storage Usage**
+
+**Time Range:** ${timeRange}
+**Compartment:** ${compartmentId || DEFAULT_COMPARTMENT_ID}
+**Total Storage:** ${results.data[0]?.totalStorage || 'N/A'}
+**Active Storage:** ${results.data[0]?.activeStorage || 'N/A'}
+**Archived Storage:** ${results.data[0]?.archivedStorage || 'N/A'}
+**Growth Rate:** ${results.data[0]?.growthRate || 'N/A'}
+
+\`\`\`json
+${JSON.stringify(results.data, null, 2)}
+\`\`\`
+
+*Storage usage statistics for your OCI Logging Analytics workspace.*`
+                    }
+                ]
+            };
+        }
+        catch (error) {
+            throw new Error(`Failed to get storage usage: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    }
+    async listParsers(args) {
+        const { parserType = 'all', displayName, isSystem, limit = 100 } = args;
+        try {
+            const results = await this.logAnalyticsClient.listParsers({
+                parserType,
+                displayName,
+                isSystem,
+                limit
+            });
+            if (!results.success) {
+                throw new Error(`Failed to list parsers: ${results.error}`);
+            }
+            return {
+                content: [
+                    {
+                        type: 'text',
+                        text: `⚙️ **OCI Log Parsers**
+
+**Total Parsers:** ${results.totalCount}
+**Parser Type Filter:** ${parserType}
+**System Parsers:** ${isSystem !== undefined ? (isSystem ? 'Yes' : 'No') : 'All'}
+
+**Available Parsers:**
+\`\`\`json
+${JSON.stringify(results.data.slice(0, 20), null, 2)}
+\`\`\`
+
+*These are the log parsers available for processing log data.*`
+                    }
+                ]
+            };
+        }
+        catch (error) {
+            throw new Error(`Failed to list parsers: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    }
+    async listLabels(args) {
+        const { labelType = 'all', displayName, limit = 100 } = args;
+        try {
+            const results = await this.logAnalyticsClient.listLabels({
+                labelType,
+                displayName,
+                limit
+            });
+            if (!results.success) {
+                throw new Error(`Failed to list labels: ${results.error}`);
+            }
+            return {
+                content: [
+                    {
+                        type: 'text',
+                        text: `🏷️ **OCI Log Analytics Labels**
+
+**Total Labels:** ${results.totalCount}
+**Label Type Filter:** ${labelType}
+
+**Available Labels:**
+\`\`\`json
+${JSON.stringify(results.data, null, 2)}
+\`\`\`
+
+*Labels are used to categorize and organize log data.*`
+                    }
+                ]
+            };
+        }
+        catch (error) {
+            throw new Error(`Failed to list labels: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    }
+    async queryRecentUploads(args) {
+        const { compartmentId, status = 'all', timeRange = '24h', limit = 50 } = args;
+        try {
+            const results = await this.logAnalyticsClient.queryRecentUploads({
+                compartmentId: compartmentId || DEFAULT_COMPARTMENT_ID,
+                status,
+                timeRange,
+                limit
+            });
+            if (!results.success) {
+                throw new Error(`Failed to query recent uploads: ${results.error}`);
+            }
+            return {
+                content: [
+                    {
+                        type: 'text',
+                        text: `📤 **Recent Log Uploads**
+
+**Time Range:** ${timeRange}
+**Status Filter:** ${status}
+**Total Uploads:** ${results.totalCount}
+**Successful:** ${results.data.filter((u) => u.status === 'SUCCESSFUL').length}
+**Failed:** ${results.data.filter((u) => u.status === 'FAILED').length}
+**In Progress:** ${results.data.filter((u) => u.status === 'IN_PROGRESS').length}
+
+**Recent Uploads:**
+\`\`\`json
+${JSON.stringify(results.data, null, 2)}
+\`\`\`
+
+*Status of recent log upload operations in OCI Logging Analytics.*`
+                    }
+                ]
+            };
+        }
+        catch (error) {
+            throw new Error(`Failed to query recent uploads: ${error instanceof Error ? error.message : String(error)}`);
         }
     }
     async run() {

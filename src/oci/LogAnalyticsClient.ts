@@ -22,6 +22,7 @@ export interface QueryResult {
   error?: string;
   queryUsed?: string;
   arePartialResults?: boolean;
+  metadata?: any;
 }
 
 export interface ConnectionStatus {
@@ -805,5 +806,462 @@ export class LogAnalyticsClient {
       success: true,
       data: results
     };
+  }
+
+  async listLogSources(request: {
+    compartmentId: string;
+    sourceType?: string;
+    displayName?: string;
+    limit?: number;
+  }): Promise<QueryResult> {
+    // Use Management API instead of query
+    return new Promise((resolve) => {
+      const pythonPath = '/Users/abirzu/dev/mcp-oci-logan-server/python/venv/bin/python';
+      const scriptPath = '/Users/abirzu/dev/mcp-oci-logan-server/python/logan_client.py';
+
+      const args = [scriptPath, 'list_sources'];
+
+      if (request.compartmentId) args.push('--compartment-id', request.compartmentId);
+      if (request.displayName) args.push('--display-name', request.displayName);
+      if (request.sourceType) args.push('--source-type', request.sourceType);
+      if (request.limit) args.push('--limit', request.limit.toString());
+
+      const pythonProcess = spawn(pythonPath, args, {
+        cwd: '/Users/abirzu/dev/mcp-oci-logan-server/python'
+      });
+
+      let stdout = '';
+      let stderr = '';
+
+      pythonProcess.stdout.on('data', (data) => {
+        stdout += data.toString();
+      });
+
+      pythonProcess.stderr.on('data', (data) => {
+        stderr += data.toString();
+      });
+
+      pythonProcess.on('close', (code) => {
+        if (code === 0) {
+          try {
+            const result = JSON.parse(stdout);
+            resolve({
+              success: result.success,
+              totalCount: result.total_count || 0,
+              data: result.results || [],
+              executionTime: result.execution_time || 0
+            });
+          } catch (parseError) {
+            resolve({
+              success: false,
+              error: `Failed to parse response: ${parseError}`,
+              totalCount: 0,
+              data: [],
+              executionTime: 0
+            });
+          }
+        } else {
+          resolve({
+            success: false,
+            error: `Python process failed: ${stderr}`,
+            totalCount: 0,
+            data: [],
+            executionTime: 0
+          });
+        }
+      });
+    });
+  }
+
+  async getLogSourceDetails(request: {
+    sourceName: string;
+    compartmentId: string;
+  }): Promise<QueryResult> {
+    // Execute query to get details about a specific log source
+    const query = `'Log Source' = '${request.sourceName}' | head 100`;
+    return await this.executeQuery({
+      query,
+      timeRange: '7d',
+      compartmentId: request.compartmentId
+    });
+  }
+
+  async listActiveLogSources(request: {
+    compartmentId: string;
+    timePeriodMinutes?: number;
+    limit?: number;
+  }): Promise<QueryResult> {
+    // Use hybrid approach: Management API for sources + Query API for counts
+    return new Promise((resolve) => {
+      const pythonPath = '/Users/abirzu/dev/mcp-oci-logan-server/python/venv/bin/python';
+      const scriptPath = '/Users/abirzu/dev/mcp-oci-logan-server/python/logan_client.py';
+
+      const args = [scriptPath, 'list_active_sources'];
+
+      if (request.compartmentId) args.push('--compartment-id', request.compartmentId);
+      if (request.timePeriodMinutes) args.push('--time-period', request.timePeriodMinutes.toString());
+      if (request.limit) args.push('--limit', request.limit.toString());
+
+      const pythonProcess = spawn(pythonPath, args, {
+        cwd: '/Users/abirzu/dev/mcp-oci-logan-server/python'
+      });
+
+      let stdout = '';
+      let stderr = '';
+
+      pythonProcess.stdout.on('data', (data) => {
+        stdout += data.toString();
+      });
+
+      pythonProcess.stderr.on('data', (data) => {
+        stderr += data.toString();
+      });
+
+      pythonProcess.on('close', (code) => {
+        if (code === 0) {
+          try {
+            const result = JSON.parse(stdout);
+            resolve({
+              success: result.success,
+              totalCount: result.total_count || 0,
+              data: result.results || [],
+              executionTime: result.execution_time || 0,
+              metadata: {
+                active_sources: result.active_sources,
+                time_period: result.time_period
+              }
+            });
+          } catch (parseError) {
+            resolve({
+              success: false,
+              error: `Failed to parse response: ${parseError}`,
+              totalCount: 0,
+              data: [],
+              executionTime: 0
+            });
+          }
+        } else {
+          resolve({
+            success: false,
+            error: `Python process failed: ${stderr}`,
+            totalCount: 0,
+            data: [],
+            executionTime: 0
+          });
+        }
+      });
+    });
+  }
+
+  async listLogFields(request: {
+    fieldType?: string;
+    isSystem?: boolean;
+    fieldName?: string;
+    limit?: number;
+  }): Promise<QueryResult> {
+    // Use Management API instead of query
+    return new Promise((resolve) => {
+      const pythonPath = '/Users/abirzu/dev/mcp-oci-logan-server/python/venv/bin/python';
+      const scriptPath = '/Users/abirzu/dev/mcp-oci-logan-server/python/logan_client.py';
+
+      const args = [scriptPath, 'list_fields'];
+
+      if (request.fieldName) args.push('--display-name', request.fieldName);
+      if (request.isSystem !== undefined) args.push('--is-system', request.isSystem.toString());
+      if (request.limit) args.push('--limit', request.limit.toString());
+
+      const pythonProcess = spawn(pythonPath, args, {
+        cwd: '/Users/abirzu/dev/mcp-oci-logan-server/python'
+      });
+
+      let stdout = '';
+      let stderr = '';
+
+      pythonProcess.stdout.on('data', (data) => {
+        stdout += data.toString();
+      });
+
+      pythonProcess.stderr.on('data', (data) => {
+        stderr += data.toString();
+      });
+
+      pythonProcess.on('close', (code) => {
+        if (code === 0) {
+          try {
+            const result = JSON.parse(stdout);
+            resolve({
+              success: result.success,
+              totalCount: result.total_count || 0,
+              data: result.results || [],
+              executionTime: result.execution_time || 0
+            });
+          } catch (parseError) {
+            resolve({
+              success: false,
+              error: `Failed to parse response: ${parseError}`,
+              totalCount: 0,
+              data: [],
+              executionTime: 0
+            });
+          }
+        } else {
+          resolve({
+            success: false,
+            error: `Python process failed: ${stderr}`,
+            totalCount: 0,
+            data: [],
+            executionTime: 0
+          });
+        }
+      });
+    });
+  }
+
+  async getFieldDetails(request: {
+    fieldName: string;
+  }): Promise<QueryResult> {
+    // Get samples of the field to understand its usage
+    const query = `'${request.fieldName}' is not null | stats count, distinct_count('${request.fieldName}') as unique_values by '${request.fieldName}' | sort -count | head 20`;
+    return await this.executeQuery({
+      query,
+      timeRange: '7d'
+    });
+  }
+
+  async getNamespaceInfo(request: {
+    includeStorageStats?: boolean;
+  }): Promise<QueryResult> {
+    // Return namespace information
+    return {
+      success: true,
+      totalCount: 1,
+      data: [{
+        namespace: this.namespace,
+        region: this.config.region || process.env.OCI_REGION || 'us-ashburn-1',
+        status: 'ACTIVE',
+        storageUsed: 'Use get_storage_usage for detailed stats',
+        storageQuota: 'Use get_storage_usage for detailed stats'
+      }],
+      executionTime: 10
+    };
+  }
+
+  async listEntities(request: {
+    compartmentId: string;
+    entityType?: string;
+    cloudResourceId?: string;
+    limit?: number;
+  }): Promise<QueryResult> {
+    // Use Management API instead of query
+    return new Promise((resolve) => {
+      const pythonPath = '/Users/abirzu/dev/mcp-oci-logan-server/python/venv/bin/python';
+      const scriptPath = '/Users/abirzu/dev/mcp-oci-logan-server/python/logan_client.py';
+
+      const args = [scriptPath, 'list_entities'];
+
+      if (request.compartmentId) args.push('--compartment-id', request.compartmentId);
+      if (request.entityType) args.push('--entity-type', request.entityType);
+      if (request.limit) args.push('--limit', request.limit.toString());
+
+      const pythonProcess = spawn(pythonPath, args, {
+        cwd: '/Users/abirzu/dev/mcp-oci-logan-server/python'
+      });
+
+      let stdout = '';
+      let stderr = '';
+
+      pythonProcess.stdout.on('data', (data) => {
+        stdout += data.toString();
+      });
+
+      pythonProcess.stderr.on('data', (data) => {
+        stderr += data.toString();
+      });
+
+      pythonProcess.on('close', (code) => {
+        if (code === 0) {
+          try {
+            const result = JSON.parse(stdout);
+            resolve({
+              success: result.success,
+              totalCount: result.total_count || 0,
+              data: result.results || [],
+              executionTime: result.execution_time || 0
+            });
+          } catch (parseError) {
+            resolve({
+              success: false,
+              error: `Failed to parse response: ${parseError}`,
+              totalCount: 0,
+              data: [],
+              executionTime: 0
+            });
+          }
+        } else {
+          resolve({
+            success: false,
+            error: `Python process failed: ${stderr}`,
+            totalCount: 0,
+            data: [],
+            executionTime: 0
+          });
+        }
+      });
+    });
+  }
+
+  async getStorageUsage(request: {
+    compartmentId: string;
+    timeRange?: string;
+  }): Promise<QueryResult> {
+    // Query for storage statistics
+    const query = "* | stats count as total_events, sum('Log Size') as total_bytes | eval total_mb=round(total_bytes/1024/1024, 2)";
+    return await this.executeQuery({
+      query,
+      timeRange: request.timeRange || '30d',
+      compartmentId: request.compartmentId
+    });
+  }
+
+  async listParsers(request: {
+    parserType?: string;
+    displayName?: string;
+    isSystem?: boolean;
+    limit?: number;
+  }): Promise<QueryResult> {
+    // Use Management API instead of query
+    return new Promise((resolve) => {
+      const pythonPath = '/Users/abirzu/dev/mcp-oci-logan-server/python/venv/bin/python';
+      const scriptPath = '/Users/abirzu/dev/mcp-oci-logan-server/python/logan_client.py';
+
+      const args = [scriptPath, 'list_parsers'];
+
+      if (request.displayName) args.push('--display-name', request.displayName);
+      if (request.isSystem !== undefined) args.push('--is-system', request.isSystem.toString());
+      if (request.limit) args.push('--limit', request.limit.toString());
+
+      const pythonProcess = spawn(pythonPath, args, {
+        cwd: '/Users/abirzu/dev/mcp-oci-logan-server/python'
+      });
+
+      let stdout = '';
+      let stderr = '';
+
+      pythonProcess.stdout.on('data', (data) => {
+        stdout += data.toString();
+      });
+
+      pythonProcess.stderr.on('data', (data) => {
+        stderr += data.toString();
+      });
+
+      pythonProcess.on('close', (code) => {
+        if (code === 0) {
+          try {
+            const result = JSON.parse(stdout);
+            resolve({
+              success: result.success,
+              totalCount: result.total_count || 0,
+              data: result.results || [],
+              executionTime: result.execution_time || 0
+            });
+          } catch (parseError) {
+            resolve({
+              success: false,
+              error: `Failed to parse response: ${parseError}`,
+              totalCount: 0,
+              data: [],
+              executionTime: 0
+            });
+          }
+        } else {
+          resolve({
+            success: false,
+            error: `Python process failed: ${stderr}`,
+            totalCount: 0,
+            data: [],
+            executionTime: 0
+          });
+        }
+      });
+    });
+  }
+
+  async listLabels(request: {
+    labelType?: string;
+    displayName?: string;
+    limit?: number;
+  }): Promise<QueryResult> {
+    // Use Management API instead of query
+    return new Promise((resolve) => {
+      const pythonPath = '/Users/abirzu/dev/mcp-oci-logan-server/python/venv/bin/python';
+      const scriptPath = '/Users/abirzu/dev/mcp-oci-logan-server/python/logan_client.py';
+
+      const args = [scriptPath, 'list_labels'];
+
+      if (request.displayName) args.push('--display-name', request.displayName);
+      if (request.limit) args.push('--limit', request.limit.toString());
+
+      const pythonProcess = spawn(pythonPath, args, {
+        cwd: '/Users/abirzu/dev/mcp-oci-logan-server/python'
+      });
+
+      let stdout = '';
+      let stderr = '';
+
+      pythonProcess.stdout.on('data', (data) => {
+        stdout += data.toString();
+      });
+
+      pythonProcess.stderr.on('data', (data) => {
+        stderr += data.toString();
+      });
+
+      pythonProcess.on('close', (code) => {
+        if (code === 0) {
+          try {
+            const result = JSON.parse(stdout);
+            resolve({
+              success: result.success,
+              totalCount: result.total_count || 0,
+              data: result.results || [],
+              executionTime: result.execution_time || 0
+            });
+          } catch (parseError) {
+            resolve({
+              success: false,
+              error: `Failed to parse response: ${parseError}`,
+              totalCount: 0,
+              data: [],
+              executionTime: 0
+            });
+          }
+        } else {
+          resolve({
+            success: false,
+            error: `Python process failed: ${stderr}`,
+            totalCount: 0,
+            data: [],
+            executionTime: 0
+          });
+        }
+      });
+    });
+  }
+
+  async queryRecentUploads(request: {
+    compartmentId: string;
+    status?: string;
+    timeRange?: string;
+    limit?: number;
+  }): Promise<QueryResult> {
+    // Query for upload activity
+    const query = "'Event Name' contains 'Upload' OR 'Event Name' contains 'Ingest' | stats count by 'Event Name', 'Status' | sort -count";
+    return await this.executeQuery({
+      query,
+      timeRange: request.timeRange || '24h',
+      compartmentId: request.compartmentId,
+      limit: request.limit || 50
+    });
   }
 }

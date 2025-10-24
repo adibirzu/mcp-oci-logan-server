@@ -29,9 +29,20 @@ export class QueryTransformer {
 
     try {
       // Try to load queries from Logan Security Dashboard project
-      const loganProjectPath = '/Users/abirzu/dev/logan-security-dashboard';
-      await this.loadFromLoganProject(loganProjectPath);
-      this.loaded = true;
+      // Allow override via environment variable, otherwise use default path (if available)
+      const loganProjectPath = process.env.LOGAN_PROJECT_PATH || path.join(process.env.HOME || '', 'logan-security-dashboard');
+
+      // Only attempt to load if path exists
+      try {
+        await fs.access(loganProjectPath);
+        await this.loadFromLoganProject(loganProjectPath);
+        this.loaded = true;
+      } catch {
+        // Path doesn't exist or isn't accessible, use defaults
+        console.error(`Logan project not found at ${loganProjectPath}, using default queries`);
+        this.loadDefaultQueries();
+        this.loaded = true;
+      }
     } catch (error) {
       console.error('Failed to load Logan queries, using defaults:', error);
       this.loadDefaultQueries();

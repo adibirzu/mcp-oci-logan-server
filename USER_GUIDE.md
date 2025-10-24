@@ -1,592 +1,519 @@
-# OCI MCP Logan Server - Comprehensive User Guide v1.2.0
+# OCI Logan MCP Server - User Guide v1.3.0
 
-This guide covers all **16 tools** available in the OCI MCP Logan Server v1.2.0 for advanced OCI Logging Analytics integration with Claude Desktop, including dashboard management, time correlation, and security analysis capabilities.
+## 🚨 Important Update - v1.3.0
 
-## Table of Contents
-1. [Quick Start](#quick-start)
-2. [Authentication Setup](#authentication-setup)
-3. [Tool Usage Guide](#tool-usage-guide)
-4. [Time Correlation Features](#time-correlation-features)
-5. [Dashboard Management](#dashboard-management)
-6. [Query Syntax Guide](#query-syntax-guide)
-7. [Troubleshooting](#troubleshooting)
-8. [Best Practices](#best-practices)
+**CRITICAL FIX APPLIED**: The `list_active_log_sources` tool now returns **complete, accurate results** matching the OCI Console exactly!
 
-## Quick Start
+**Before v1.3.0**: Resource discovery questions returned only 1-2 sources (incomplete)
+**After v1.3.0**: Returns ALL 12+ active sources with accurate log counts (complete)
 
-### Prerequisites Checklist
-- ✅ Oracle Cloud Infrastructure (OCI) account with Logging Analytics enabled
-- ✅ OCI CLI configured with appropriate permissions
-- ✅ Claude Desktop installed
-- ✅ Node.js 18+ and Python 3.8+
+This guide shows you how to get the most out of your OCI Logan MCP server.
 
-### 5-Minute Setup
+## How to Ask Questions Effectively
+
+The OCI Logan MCP server enables Claude to query and analyze your OCI Logging Analytics data. This guide explains how to interact with the MCP server for optimal results.
+
+## 📋 Quick Start Checklist
+
+Before asking questions, ensure:
+1. ✅ OCI CLI is configured (`oci iam region list` should work)
+2. ✅ Python virtual environment is set up (`./setup-python.sh`)
+3. ✅ Claude Desktop config includes correct compartment ID and region
+4. ✅ You have access to the OCI compartment with Logging Analytics data
+5. ✅ **v1.3.0 or later installed** (for complete results)
+
+## 🎯 Best Practices for Asking Questions
+
+### ✅ DO: Ask Natural Language Questions
+
+The MCP server is designed to understand natural language queries. Examples:
+
+```
+"Show me failed login attempts in the last 24 hours"
+"Find all credential access techniques from MITRE ATT&CK in the last 30 days"
+"Analyze activity for IP address 192.168.1.100"
+"What security events happened yesterday?"
+"List all available log sources in my environment"
+```
+
+### ✅ DO: Be Specific About Time Ranges
+
+The server understands various time expressions:
+
+```
+"Show me logs from the last hour"
+"Find errors in the past 7 days"
+"Get authentication events from the last 30 days"
+"What happened in the last week?"
+```
+
+**Supported time ranges:**
+- 1h, 6h, 12h, 24h (hours)
+- 1d, 7d, 30d (days)
+- 1w, 2w (weeks)
+- 1m (month)
+
+**Important:** For MITRE ATT&CK/Sysmon data, use at least **30 days** time range for meaningful results.
+
+### ✅ DO: Ask About Specific Security Events
+
+The server has built-in understanding of common security patterns:
+
+```
+"Find privilege escalation attempts"
+"Show me network anomalies"
+"Detect potential data exfiltration"
+"Find malware-related events"
+"Show administrator login activity"
+```
+
+### ✅ DO: Use Resource Discovery Questions
+
+The server can help you understand what's available in your OCI Logging Analytics:
+
+```
+"What log sources are available?"
+"Show me all log fields"
+"List entities in my environment"
+"What parsers are configured?"
+"Show storage usage statistics"
+"What labels are available for categorization?"
+```
+
+### ❌ DON'T: Ask About Dashboard Management (Limited)
+
+Dashboard creation and modification tools are **partially implemented** and may return mock data:
+
+```
+❌ "Create a new dashboard for security monitoring"
+❌ "Update my existing dashboard"
+⚠️  "List dashboards" (returns sample data, not real dashboards)
+```
+
+### ❌ DON'T: Expect Real-Time Alerts
+
+The MCP server queries historical data. It doesn't provide real-time alerting or monitoring.
+
+### ❌ DON'T: Ask About Non-OCI Data Sources
+
+The server only accesses OCI Logging Analytics data in your configured compartment.
+
+## 🔍 Types of Questions the MCP Server Handles Well
+
+### 1. Security Event Analysis
+
+```
+"Find all failed authentication attempts from external IPs"
+"Show me privilege escalation events grouped by user"
+"Detect lateral movement patterns in my network"
+"What are the most common security events?"
+```
+
+### 2. MITRE ATT&CK Investigation
+
+```
+"Show all MITRE techniques detected in the last month"
+"Find credential access techniques (T1003)"
+"What execution techniques have been observed?"
+"Show me all tactics by frequency"
+```
+
+### 3. IP Address Investigation
+
+```
+"Analyze all activity for IP 10.0.1.50"
+"Show authentication attempts from 203.0.113.45"
+"What network connections involve 192.168.1.100?"
+"Find communication patterns for this IP address"
+```
+
+### 4. User Behavior Analysis
+
+```
+"Show me activity for user 'admin' in the last week"
+"Find users with unusual login patterns"
+"What are the most active users?"
+"Detect anomalous user behavior"
+```
+
+### 5. Resource Discovery
+
+```
+"What log sources are actively sending data?"
+"List all available fields for querying"
+"Show me entities of type 'host'"
+"What parsers are available for JSON logs?"
+"Show recent log uploads and their status"
+```
+
+### 6. Advanced Analytics
+
+```
+"Cluster security alerts to find patterns"
+"Detect outliers in user activity"
+"Show time-based clustering of events"
+"Correlate authentication events with network activity"
+"Find sequences of suspicious events"
+```
+
+## 🛠️ Understanding MCP Tools
+
+The server provides **33 specialized tools** that Claude uses automatically:
+
+### Core Query Tools (4 tools)
+- **execute_logan_query** - Direct OCI query execution
+- **search_security_events** - Natural language security search
+- **get_mitre_techniques** - MITRE ATT&CK analysis
+- **analyze_ip_activity** - IP behavioral analysis
+
+### Advanced Analytics (5 tools)
+- **execute_advanced_analytics** - ML-powered analysis (clustering, NLP, outliers)
+- **execute_statistical_analysis** - Statistical operations
+- **execute_field_operations** - Field extraction and transformation
+- **search_log_patterns** - Dynamic pattern detection
+- **correlation_analysis** - Cross-log event correlation
+
+### Resource Management (10 tools)
+- **list_log_sources** - Available log sources
+- **get_log_source_details** - Detailed source information
+- **list_log_fields** - Available query fields
+- **get_field_details** - Field metadata
+- **get_namespace_info** - Namespace information
+- **list_entities** - Entities (hosts, databases, etc.)
+- **get_storage_usage** - Storage statistics
+- **list_parsers** - Available log parsers
+- **list_labels** - Categorization labels
+- **query_recent_uploads** - Recent log uploads
+
+### Dashboard Tools (7 tools - Partially Implemented ⚠️)
+- list_dashboards, get_dashboard, create_dashboard, etc.
+- **Note:** These return sample/mock data in current version
+
+### Utility Tools (4 tools)
+- **get_logan_queries** - Predefined query templates
+- **validate_query** - Query syntax validation
+- **get_documentation** - Built-in help system
+- **check_oci_connection** - Authentication testing
+
+### Saved Search Tools (3 tools - Mixed Implementation)
+- create_saved_search (Mock), list_saved_searches (Mock), export_dashboard
+
+## 📊 Example Conversation Flow
+
+### Discovery Phase
+```
+User: "What log sources are available in my environment?"
+Claude: [Uses list_active_log_sources tool - v1.3.0 fix!]
+Claude: "I found 12 active log sources with data in the last 60 minutes:
+
+        1. OCI Audit Logs: 14,623 logs
+        2. Database XML Alert Logs: 8,464 logs
+        3. OCI Cloud Guard Problems: 6,721 logs
+        4. OCI VCN Flow Unified Schema Logs: 5,840 logs
+        5. OCI Service Connector Hub Logs: 2,656 logs
+        6. Database Alert Logs: 593 logs
+        7. OCI WAF Logs: 119 logs
+        8. com.oraclecloud.dns.private.resolver: 116 logs
+        9. Database Trace Logs: 84 logs
+        10. OCI Events Logs: 41 logs
+        11. OCI Object Storage Access Logs: 14 logs
+        12. OCI_Monitoring: 12 logs
+
+        Total: 39,363 logs across all sources"
+
+User: "Show me what fields I can query"
+Claude: [Uses list_log_fields tool]
+Claude: "Here are the available fields: 'Event Name', 'User Name',
+        'IP Address', 'Technique_id', 'Log Source', etc."
+```
+
+**Note**: The complete log source listing is thanks to the v1.3.0 critical fix!
+
+### Investigation Phase
+```
+User: "Find failed login attempts in the last 24 hours"
+Claude: [Uses search_security_events tool]
+Claude: "I found 47 failed login attempts. Top 3 users:
+        - admin: 23 attempts from 203.0.113.45
+        - dbuser: 12 attempts from 10.0.1.50
+        - testuser: 8 attempts from 192.168.1.100"
+
+User: "Analyze the IP 203.0.113.45"
+Claude: [Uses analyze_ip_activity tool]
+Claude: "This IP shows suspicious behavior:
+        - 23 failed authentication attempts
+        - Connections to 5 different hosts
+        - No successful logins observed"
+```
+
+### Deep Analysis Phase
+```
+User: "Are there any MITRE techniques associated with this activity?"
+Claude: [Uses get_mitre_techniques tool]
+Claude: "Found the following MITRE techniques:
+        - T1110 (Brute Force) - 23 events
+        - T1078 (Valid Accounts) - 5 events
+        - T1021 (Remote Services) - 3 events"
+```
+
+## 🔧 Troubleshooting
+
+### "Getting incomplete log source list" (Only 1-2 sources shown)
+
+**This indicates you're running an older version!**
+
+**Symptom**: When asking "What log sources are available?", you only see 1-2 sources, but your OCI Console shows 12+ sources.
+
+**Cause**: You're running a version before v1.3.0 that had the incomplete results bug.
+
+**Solution**:
 ```bash
-# 1. Clone and build
-git clone https://github.com/adibirzu/mcp-oci-logan-server.git
-cd mcp-oci-logan-server
-npm install && npm run build
-
-# 2. Setup Python environment
-./setup-python.sh
-
-# 3. Configure Claude Desktop
-cp claude_desktop_config.json.template claude_desktop_config.json
-# Edit paths and compartment ID in the config file
-
-# 4. Test installation
-node test-server.js
+cd /path/to/mcp-oci-logan-server
+git pull  # If using git
+npm run build
+# Restart Claude Desktop
 ```
 
-## Authentication Setup
-
-### Method 1: OCI CLI Configuration (Recommended)
-```bash
-oci setup config
+**Verify the fix**: Ask Claude:
 ```
-This creates `~/.oci/config` with your credentials.
-
-### Method 2: Environment Variables
-```bash
-export OCI_USER_ID="ocid1.user.oc1..aaaaaaaa[your-user-id]"
-export OCI_FINGERPRINT="aa:bb:cc:dd:..."
-export OCI_TENANCY_ID="ocid1.tenancy.oc1..aaaaaaaa[your-tenancy-id]"
-export OCI_REGION="eu-frankfurt-1"
-export OCI_KEY_FILE="/path/to/private/key.pem"
-export OCI_COMPARTMENT_ID="ocid1.compartment.oc1..aaaaaaaa[your-compartment-id]"
+"What log sources are available in my environment?"
 ```
+You should now see ALL 12+ active sources with their log counts.
 
-### Method 3: Instance Principal (OCI Compute Only)
-No configuration needed - automatically detected when running on OCI instances.
+### "No results returned"
 
-### Verification
-```bash
-# Test connection
-node test-oci-direct.js
+**Possible causes:**
+1. Time range too narrow (especially for MITRE data - use 30d+)
+2. Incorrect compartment ID in configuration
+3. Log sources not configured in OCI Logging Analytics
+4. No data ingested for the specified time period
 
-# Expected output: "✅ Connection successful"
+**Solutions:**
+```
+"Check my OCI connection status"
+"What log sources are actively sending data?"
+"Show me recent log uploads"
+"List entities in my environment"
 ```
 
-## Tool Usage Guide
+### "Query syntax error"
 
-### Core Query Tools
-
-#### 🔍 `execute_logan_query`
-Execute OCI Logging Analytics queries with proper time correlation.
-
-**Basic Usage:**
-```json
-{
-  "query": "'Event Name' = 'UserLoginFailed' | stats count by 'User Name'",
-  "timeRange": "24h",
-  "compartmentId": "ocid1.compartment.oc1..aaaaaaaa[your-compartment-id]"
-}
+**Solution:**
+```
+"Validate this query: [your query]"
+"Show me the documentation for query syntax"
 ```
 
-**Advanced Usage:**
-```json
-{
-  "query": "'Log Source' = 'Windows Sysmon Events' and Technique_id != '' | fields Technique_id, 'Destination IP'",
-  "queryName": "MITRE Technique Discovery",
-  "timeRange": "30d",
-  "compartmentId": "ocid1.compartment.oc1..aaaaaaaa[your-compartment-id]",
-  "environment": "production"
-}
+### "Authentication failed"
+
+**Solution:**
+1. Test OCI CLI: `oci iam region list`
+2. Check config: `cat ~/.oci/config`
+3. Ask Claude: `"Check my OCI connection and tell me if there are any issues"`
+
+### "Dashboard tools not working"
+
+**Expected behavior:** Dashboard management tools (create, update, list) are partially implemented and may return sample data. This is a known limitation documented in the README.
+
+## 🎓 Learning More
+
+### Get Built-in Help
+```
+"Show me documentation for query syntax"
+"Get help with MITRE technique mapping"
+"Show me examples of field operations"
+"What functions are available for queries?"
 ```
 
-#### 🔍 `search_security_events`
-Natural language security event search.
-
-**Examples:**
+### Explore Predefined Queries
 ```
-"Find failed login attempts in the last 24 hours"
-"Show privilege escalation events this week"
-"Detect network anomalies in the last 6 hours"
+"Show me all available security queries"
+"List MITRE ATT&CK query templates"
+"What authentication monitoring queries are available?"
 ```
 
-**Parameters:**
-- `searchTerm`: Natural language description
-- `eventType`: login, privilege_escalation, network_anomaly, data_exfiltration, malware, all
-- `timeRange`: Time period (default: 24h)
-- `limit`: Max results (default: 100)
-
-#### 🎯 `get_mitre_techniques`
-MITRE ATT&CK technique analysis with optimized time ranges.
-
-**Find Specific Technique:**
-```json
-{
-  "techniqueId": "T1003",
-  "timeRange": "30d"
-}
+### Test Your Setup
+```
+"Run a connection test"
+"Validate my OCI configuration"
+"Show me namespace information"
+"What's my storage usage?"
 ```
 
-**Find by Category:**
-```json
-{
-  "category": "credential_access",
-  "timeRange": "7d"
-}
+## 🚀 Advanced Usage Patterns
+
+### Correlation Analysis
+```
+"Correlate failed logins with network connection attempts in the same time window"
+"Find sequences of privilege escalation followed by data access"
+"Link authentication events to resource modifications"
 ```
 
-**Find All Techniques:**
-```json
-{
-  "techniqueId": "all",
-  "category": "all",
-  "timeRange": "30d"
-}
+### Statistical Analysis
+```
+"Show me authentication patterns by hour of day"
+"Calculate Z-scores for error frequencies"
+"Find outliers in user activity"
+"Analyze percentiles of response times"
 ```
 
-#### 🌐 `analyze_ip_activity`
-Comprehensive IP address behavior analysis.
-
-**Full Analysis:**
-```json
-{
-  "ipAddress": "192.168.1.100",
-  "analysisType": "full",
-  "timeRange": "24h"
-}
+### Pattern Detection
+```
+"Cluster security alerts to identify attack patterns"
+"Detect temporal event patterns"
+"Find geographic patterns in network traffic"
+"Identify communication sequences"
 ```
 
-**Focused Analysis Types:**
-- `authentication`: Login/logout events
-- `network`: Network connections and traffic
-- `threat_intel`: Threat intelligence correlation
-- `communication_patterns`: Communication analysis
+## 📝 Tips for Best Results
 
-### Dashboard Management Tools
+1. **Start broad, then narrow:** Begin with discovery questions, then focus on specific events
+2. **Use appropriate time ranges:** 24h for recent events, 30d+ for MITRE data
+3. **Leverage natural language:** Don't worry about exact query syntax
+4. **Chain questions:** Build on previous answers for deeper investigation
+5. **Verify assumptions:** Ask about available resources before querying specific data
+6. **Use validation:** If you write custom queries, ask Claude to validate them first
 
-#### 📊 `list_dashboards`
-Browse available dashboards in your OCI tenant.
+## ⚙️ Configuration Tips
+
+### Recommended Claude Desktop Configuration
 
 ```json
 {
-  "compartmentId": "ocid1.compartment.oc1..aaaaaaaa[your-compartment-id]",
-  "lifecycleState": "ACTIVE",
-  "limit": 50
-}
-```
-
-#### 📊 `get_dashboard`
-Get complete dashboard details and configuration.
-
-```json
-{
-  "dashboardId": "ocid1.dashboard.oc1..aaaaaaaa[your-dashboard-id]",
-  "compartmentId": "ocid1.compartment.oc1..aaaaaaaa[your-compartment-id]"
-}
-```
-
-#### 📊 `create_dashboard`
-Create custom security dashboards.
-
-```json
-{
-  "displayName": "Security Operations Dashboard",
-  "description": "Real-time security monitoring",
-  "compartmentId": "ocid1.compartment.oc1..aaaaaaaa[your-compartment-id]",
-  "dashboardConfig": {
-    "widgets": [
-      {
-        "displayName": "Failed Logins",
-        "widgetType": "BAR_CHART",
-        "query": "'Event Name' = 'UserLoginFailed' | stats count by 'User Name'",
-        "position": {"row": 0, "column": 0, "height": 4, "width": 6}
-      },
-      {
-        "displayName": "Top Source IPs",
-        "widgetType": "PIE_CHART", 
-        "query": "'Log Source' = 'VCN Flow Logs' | stats count by 'Source IP' | head 10",
-        "position": {"row": 0, "column": 6, "height": 4, "width": 6}
+  "mcpServers": {
+    "oci-logan": {
+      "command": "node",
+      "args": ["/absolute/path/to/mcp-oci-logan-server/dist/index.js"],
+      "env": {
+        "OCI_COMPARTMENT_ID": "ocid1.compartment.oc1..your-id",
+        "OCI_REGION": "us-ashburn-1",
+        "SUPPRESS_LABEL_WARNING": "True",
+        "LOGAN_DEBUG": "false"
       }
-    ]
+    }
   }
 }
 ```
 
-#### 📤 `export_dashboard` & 📥 `import_dashboard`
-Dashboard portability for backup and sharing.
+**Environment Variables:**
+- `OCI_COMPARTMENT_ID` - **Required** - Your OCI compartment OCID
+- `OCI_REGION` - **Recommended** - Default: us-ashburn-1
+- `LOGAN_DEBUG` - Enable debug logging (set to "true")
+- `LOGAN_PROJECT_PATH` - Optional path to Logan Security Dashboard project
 
-**Export:**
-```json
-{
-  "dashboardId": "ocid1.dashboard.oc1..aaaaaaaa[your-dashboard-id]",
-  "includeQueries": true
-}
-```
+### Enable Debug Mode
 
-**Import:**
-```json
-{
-  "dashboardJson": "{\"version\":\"1.0\",\"dashboard\":{...}}",
-  "compartmentId": "ocid1.compartment.oc1..aaaaaaaa[your-compartment-id]",
-  "newDisplayName": "Imported Security Dashboard"
-}
-```
-
-### Saved Search Tools
-
-#### 💾 `create_saved_search`
-Create reusable query templates.
+For troubleshooting, enable debug mode:
 
 ```json
-{
-  "displayName": "Suspicious Network Traffic",
-  "query": "'Log Source' = 'VCN Flow Logs' and protocol = 'TCP' and action = 'REJECT'",
-  "description": "Blocked TCP connections indicating potential threats",
-  "widgetType": "TABLE"
-}
+"LOGAN_DEBUG": "true"
 ```
 
-#### 📋 `list_saved_searches`
-Browse your saved queries.
+Then check Claude Desktop logs at:
+- Mac: `~/Library/Logs/Claude/`
+- Check system console for MCP server output
 
-```json
-{
-  "compartmentId": "ocid1.compartment.oc1..aaaaaaaa[your-compartment-id]",
-  "displayName": "security",
-  "limit": 25
-}
-```
+## 🆘 Getting Help
 
-## Time Correlation Features
+If you encounter issues:
 
-### Synchronized Time Periods
-All queries use consistent time calculation for proper log correlation:
-
-```
-Time Range: 30d
-Actual Period: Last 30 Days (2025-06-29 to 2025-07-29)
-Data Span: 43,200 minutes exactly
-```
-
-### Cross-Log Correlation Examples
-
-**Correlate Authentication and Network Events:**
-```bash
-# Step 1: Find failed logins
-execute_logan_query: "'Event Name' = 'UserLoginFailed'" (24h)
-
-# Step 2: Analyze source IPs from same period  
-analyze_ip_activity: "192.168.1.100" (24h)
-
-# Result: Both queries span identical time periods for correlation
-```
-
-**MITRE Technique Timeline:**
-```bash
-# Step 1: Find credential access techniques
-get_mitre_techniques: "credential_access" (30d)
-
-# Step 2: Correlate with authentication logs
-search_security_events: "authentication" (30d)
-
-# Result: Synchronized 30-day periods enable proper timeline analysis
-```
-
-### Time Range Recommendations
-
-| Use Case | Recommended Range | Reason |
-|----------|------------------|---------|
-| Real-time Monitoring | 1h - 6h | Recent events |
-| Daily Operations | 24h - 1d | Daily patterns |
-| Weekly Analysis | 7d | Weekly trends |
-| **Sysmon/MITRE Data** | **30d** | **Default OCI retention** |
-| Compliance Reporting | 30d - 1m | Regulatory requirements |
-
-## Dashboard Management
-
-### Dashboard Workflow
-
-1. **Discover Existing Dashboards:**
-   ```bash
-   list_dashboards -> Browse available dashboards
-   get_dashboard -> Review configuration
-   get_dashboard_tiles -> Analyze widgets
+1. **Test basics:**
+   ```
+   "Check my OCI connection"
+   "Show me namespace information"
+   "List available log sources"
    ```
 
-2. **Create Custom Dashboard:**
-   ```bash
-   create_saved_search -> Build query templates
-   create_dashboard -> Assemble dashboard with widgets
+2. **Check configuration:**
+   - Verify `~/.oci/config` exists
+   - Confirm compartment ID is correct
+   - Test OCI CLI: `oci iam region list`
+
+3. **Review logs:**
+   - Enable `LOGAN_DEBUG: "true"`
+   - Check Claude Desktop logs
+   - Look for authentication or permission errors
+
+4. **Verify data availability:**
+   ```
+   "Show me recent log uploads"
+   "What log sources are active?"
+   "List entities in my environment"
    ```
 
-3. **Maintain Dashboards:**
-   ```bash
-   update_dashboard -> Modify existing dashboards
-   export_dashboard -> Backup configuration
-   import_dashboard -> Restore or share
-   ```
+## 📚 Additional Resources
 
-### Widget Types and Use Cases
+- **OCI Query Syntax:** Ask Claude: `"Show me documentation for query syntax"`
+- **MITRE ATT&CK:** Ask Claude: `"Get help with MITRE technique mapping"`
+- **Field Reference:** Ask Claude: `"List all available log fields"`
+- **Query Examples:** Ask Claude: `"Show me security query examples"`
 
-| Widget Type | Best For | Example Query |
-|-------------|----------|---------------|
-| `LINE_CHART` | Time series trends | `timestats count by 'Event Name'` |
-| `BAR_CHART` | Categorical comparisons | `stats count by 'User Name' \| head 10` |
-| `PIE_CHART` | Proportional data | `stats count by protocol \| head 5` |
-| `TABLE` | Detailed records | `fields Time, 'User Name', 'Event Name'` |
-| `METRIC` | Single values | `stats count` |
+## 🔍 Verifying Your Installation
 
-### Dashboard Best Practices
+### Check Your Version
 
-1. **Layout Organization:**
-   - Row 0: High-level metrics (4 widgets across)
-   - Row 4: Detailed charts (2 larger widgets)
-   - Row 8: Investigation tables (full width)
+To verify you have v1.3.0 or later with the critical fix:
 
-2. **Query Performance:**
-   - Always include time filters
-   - Use `| head 10` for top-N results
-   - Filter early in query pipeline
-
-3. **Widget Sizing:**
-   - Metrics: 3x2 (width x height)
-   - Charts: 6x4
-   - Tables: 12x6 (full width)
-
-## Query Syntax Guide
-
-### Field Names and Operators
-```sql
--- Quoted field names (required for spaces)
-'Event Name' = 'UserLogin'
-'User Name' contains 'admin'
-'IP Address' in ('192.168.1.1', '10.0.0.1')
-
--- Time filtering (capitalized 'Time')
-Time > dateRelative(24h)
-Time between '2025-07-01T00:00:00Z' and '2025-07-02T00:00:00Z'
-
--- Logical operators
-and, or, not
-!=, =, contains, in, not in
-```
-
-### Common Query Patterns
-
-**Security Event Analysis:**
-```sql
--- Failed authentication attempts
-'Event Name' = 'UserLoginFailed' 
-and Time > dateRelative(24h) 
-| stats count by 'User Name', 'Source IP' 
-| sort -count
-
--- Privilege escalation detection
-'Event Name' contains 'Privilege' 
-and Time > dateRelative(7d)
-| fields Time, 'User Name', 'Event Details'
-| sort Time desc
-
--- Network anomaly detection
-'Log Source' = 'VCN Flow Logs' 
-and action = 'REJECT' 
-and Time > dateRelative(1h)
-| stats count by 'Source IP', 'Destination Port'
-| where count > 10
-```
-
-**MITRE ATT&CK Queries:**
-```sql
--- Technique discovery
-'Log Source' = 'Windows Sysmon Events' 
-and Technique_id != '' 
-and Time > dateRelative(30d)
-| stats count by Technique_id
-| sort -count
-
--- Specific technique analysis
-'Technique_id' = 'T1003' 
-and Time > dateRelative(7d)
-| fields Time, 'Source IP', 'Destination IP', 'Event Details'
-```
-
-**Performance Queries:**
-```sql
--- Query optimization patterns
-'Log Source' = 'Specific Source'    -- Filter first
-and Time > dateRelative(24h)        -- Always include time
-and field1 = 'value'                -- Specific filters early
-| stats count by field2             -- Aggregation
-| head 100                          -- Limit results
-```
-
-### Query Syntax Fixes
-
-The server automatically fixes common OCI compatibility issues:
-
-```sql
--- Automatic fixes applied:
-count(*) -> count              -- OCI doesn't support count(*)
-!= null -> != ""              -- Null handling
-top 10 -> sort -count | head 10   -- Top command conversion
-'field' -> field              -- Quote normalization
-```
-
-## Troubleshooting
-
-### Common Issues and Solutions
-
-#### Authentication Errors
-```
-Error: "Authentication failed"
-Solutions:
-1. Check OCI CLI: `oci iam user get --user-id <user-ocid>`
-2. Verify key file permissions: `chmod 600 ~/.oci/oci_api_key.pem`
-3. Test connection: `node test-oci-direct.js`
-```
-
-#### Query Syntax Errors
-```
-Error: "Missing input" or "Syntax error"
-Solutions:
-1. Use validate_query tool first
-2. Check field name capitalization ('Time' not 'time')
-3. Quote field names with spaces
-4. Verify operator syntax (use 'contains' not 'like')
-```
-
-#### No Results Returned
-```
-Possible causes:
-1. Time range too restrictive -> Try longer periods
-2. Wrong compartment -> Verify compartment has log data
-3. Log source not configured -> Check OCI Logging Analytics setup
-4. Field names incorrect -> Use get_documentation for field reference
-```
-
-#### Performance Issues
-```
-Slow queries:
-1. Add specific time filters first
-2. Filter by log source early: 'Log Source' = 'Specific Source'
-3. Use indexed fields for filtering
-4. Limit results: | head 100
-```
-
-### Debug Tools
-
-#### Server Debugging
 ```bash
-# Check server functionality
-node test-server.js
-
-# Verify OCI connection
-node test-oci-direct.js
-
-# Test time correlation
-node test-time-correlation.js
-
-# Debug logs location
-tail -f /tmp/mcp-debug.log
-tail -f /tmp/mcp-tool-debug.log
+cd /path/to/mcp-oci-logan-server
+grep "Version" README.md | head -1
 ```
 
-#### Query Debugging
-```bash
-# Use validate_query tool
-{
-  "query": "your-query-here",
-  "fix": true
-}
+Should show: `**Version**: 1.3.0`
 
-# Check documentation
-{
-  "topic": "troubleshooting",
-  "searchTerm": "syntax error"
-}
+### Test the Fix
+
+After installing v1.3.0, restart Claude Desktop and ask:
+
+```
+"What log sources are available in my environment?"
 ```
 
-## Best Practices
+**Expected result (v1.3.0+)**:
+- Shows 12+ active sources with individual log counts
+- Matches your OCI Console exactly
+- Total log count displayed
 
-### Security Best Practices
+**Old behavior (pre-v1.3.0)**:
+- Shows only 1-2 sources (incomplete)
+- Missing most of your log sources
 
-1. **Compartment Access:**
-   - Use specific compartment IDs, not root compartment
-   - Follow principle of least privilege
-   - Regularly audit access permissions
+If you still see incomplete results, run `npm run build` again and restart Claude Desktop.
 
-2. **Query Safety:**
-   - Always include time filters to prevent excessive resource usage
-   - Validate queries before execution
-   - Use saved searches for tested queries
+## 📝 Quick Reference Card
 
-3. **Data Handling:**
-   - Never log sensitive data in debug files
-   - Use secure authentication methods
-   - Regularly rotate API keys
+### Most Useful Questions
 
-### Performance Best Practices
+**Resource Discovery**:
+```
+"What log sources are available?"
+"Show me all available fields"
+"List entities in my environment"
+```
 
-1. **Query Optimization:**
-   ```sql
-   -- Good: Specific and filtered
-   'Log Source' = 'Windows Sysmon Events' 
-   and Time > dateRelative(24h) 
-   and 'Event Name' = 'ProcessCreated'
-   | head 100
-   
-   -- Avoid: Broad and unfiltered
-   * | stats count by field
-   ```
+**Security Investigation**:
+```
+"Show me failed login attempts in the last 24 hours"
+"Find MITRE techniques in the last 30 days"
+"Analyze activity for IP [address]"
+```
 
-2. **Time Range Selection:**
-   - Use appropriate time ranges for your use case
-   - Default to 24h for regular monitoring
-   - Use 30d for MITRE/Sysmon analysis
-   - Avoid very long ranges (>30d) without specific filters
+**Advanced Analysis**:
+```
+"Cluster security alerts to find patterns"
+"Correlate authentication events with network activity"
+"Detect outliers in user behavior"
+```
 
-3. **Dashboard Performance:**
-   - Limit widgets per dashboard (< 20)
-   - Use efficient queries in widgets
-   - Set appropriate refresh intervals
-   - Cache frequently used saved searches
-
-### Operational Best Practices
-
-1. **Documentation:**
-   - Name saved searches descriptively
-   - Add descriptions to dashboards and searches
-   - Document custom query logic
-
-2. **Monitoring:**
-   - Create dashboards for key security metrics
-   - Set up saved searches for common investigations
-   - Export important dashboards as backup
-
-3. **Collaboration:**
-   - Share dashboards via export/import
-   - Use consistent naming conventions
-   - Document compartment access patterns
-
-### Error Handling Best Practices
-
-1. **Graceful Degradation:**
-   - Always provide compartment IDs explicitly
-   - Handle authentication failures gracefully
-   - Validate time ranges before execution
-
-2. **Monitoring:**
-   - Check debug logs regularly
-   - Monitor query performance
-   - Track authentication status
-
-3. **Recovery:**
-   - Keep dashboard exports as backups
-   - Document working query patterns
-   - Maintain alternative authentication methods
+**Getting Help**:
+```
+"Show me documentation for query syntax"
+"Validate this query: [query]"
+"Check my OCI connection"
+```
 
 ---
 
-## Support and Resources
+**Remember:** The MCP server is designed to be conversational. You don't need to memorize commands or syntax - just ask natural language questions, and Claude will use the appropriate tools automatically!
 
-- **Built-in Help:** Use `get_documentation` tool
-- **Test Tools:** Run `test-*.js` scripts for diagnostics
-- **Debug Logs:** Check `/tmp/mcp-*.log` files
-- **OCI Documentation:** [Oracle Cloud Infrastructure Logging Analytics](https://docs.oracle.com/en-us/iaas/logging-analytics/)
-
-**Version:** 1.2.0  
-**Last Updated:** July 2025
+**Version**: v1.3.0 with complete results fix 🚨
