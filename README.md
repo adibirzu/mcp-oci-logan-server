@@ -68,18 +68,54 @@ A Model Context Protocol (MCP) server that connects Claude to Oracle Cloud Infra
 
 ## Installation
 
-### 1. Clone and Install
+### Quick Install (Recommended) 🚀
+
+For a complete automated installation with all checks and configuration:
+
+```bash
+git clone https://github.com/adibirzu/mcp-oci-logan-server.git
+cd mcp-oci-logan-server
+./install.sh
+```
+
+The installer will:
+- ✅ Check prerequisites (Node.js 18+, Python 3.8+, OCI CLI)
+- ✅ Install Node.js dependencies
+- ✅ Setup Python virtual environment
+- ✅ Build TypeScript code
+- ✅ Test the installation
+- ✅ Optionally configure Claude Desktop
+- ✅ Verify all 33 tools are available
+
+**That's it!** The script handles everything automatically.
+
+### Manual Installation
+
+If you prefer to install manually or already have some components installed:
+
+#### 1. Clone and Install Node Dependencies
 
 ```bash
 git clone https://github.com/adibirzu/mcp-oci-logan-server.git
 cd mcp-oci-logan-server
 npm install
+```
+
+#### 2. Setup Python Environment
+
+```bash
+./setup-python.sh
+```
+
+#### 3. Build TypeScript
+
+```bash
 npm run build
 ```
 
-### 2. OCI Configuration
+#### 4. OCI Configuration
 
-**Option A: OCI CLI Configuration**
+**Option A: OCI CLI Configuration (Recommended)**
 ```bash
 oci setup config
 ```
@@ -97,54 +133,54 @@ export OCI_COMPARTMENT_ID="ocid1.compartment.oc1..xxx"
 **Option C: Instance Principal (for OCI Compute)**
 No configuration needed - automatically detected when running on OCI.
 
-### 3. Python Environment Setup
+#### 5. Claude Desktop Configuration
 
-```bash
-# Setup Python virtual environment for query execution
-./setup-python.sh
-```
-
-### 4. Claude Desktop Configuration
-
-Copy the template and customize:
-```bash
-cp claude_desktop_config.json.template claude_desktop_config.json
-```
-
-Edit `claude_desktop_config.json` with your paths:
+Edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
 
 ```json
 {
   "mcpServers": {
     "oci-logan": {
       "command": "node",
-      "args": ["/Users/abirzu/dev/mcp-oci-logan-server/dist/index.js"],
+      "args": ["/ABSOLUTE/PATH/TO/mcp-oci-logan-server/dist/index.js"],
       "env": {
-        "OCI_COMPARTMENT_ID": "ocid1.compartment.oc1..aaaaaaaa[your-compartment-id]",
-        "OCI_REGION": "eu-frankfurt-1"
+        "OCI_COMPARTMENT_ID": "ocid1.compartment.oc1..your-id",
+        "OCI_REGION": "us-ashburn-1",
+        "SUPPRESS_LABEL_WARNING": "True",
+        "LOGAN_DEBUG": "false"
       }
     }
   }
 }
 ```
 
-Then add to `~/Library/Application Support/Claude/claude_desktop_config.json`.
+**Important**: Use absolute paths for the `args` field.
 
-### 5. Test Installation
+#### 6. Test Installation
 
 ```bash
-# Test server functionality
+# Test Python client
+python python/logan_client.py --help
+
+# Quick rebuild and start
+./quick-start.sh
+
+# Test specific features (optional)
 node test-server.js
-
-# Test OCI direct connection
-node test-oci-direct.js
-
-# Test time correlation
-node test-time-correlation.js
-
-# Test dashboard export
-node test-dashboard-export.js
 ```
+
+### Quick Start for Updates
+
+If you already have everything installed and just need to rebuild:
+
+```bash
+./quick-start.sh
+```
+
+This script:
+- Updates dependencies
+- Rebuilds TypeScript
+- Shows next steps
 
 ## Usage Examples
 
@@ -586,9 +622,23 @@ config files:
 
 MIT License - see LICENSE file for details.
 
+## Documentation
+
+Complete documentation is available in the [`docs/`](docs/) folder:
+
+- **[Installation Guide](docs/INSTALLATION.md)** - Complete installation instructions
+- **[User Guide](docs/USER_GUIDE.md)** - How to use the MCP server effectively
+- **[Release Notes](docs/RELEASE_NOTES_v1.3.0.md)** - v1.3.0 changelog
+- **[Critical Fix](docs/CRITICAL_FIX_README.md)** - Important v1.3.0 fix details
+- **[Improvements](docs/IMPROVEMENTS.md)** - Detailed changes
+- **[Technical Docs](docs/technical/)** - API coverage, security audits, etc.
+
+See [`docs/README.md`](docs/README.md) for a complete documentation index.
+
 ## Support
 
-- **Documentation**: Built-in help system
+- **Documentation**: See [`docs/`](docs/) folder
+- **Built-in Help**: Ask Claude to use the MCP tools
 - **Issues**: GitHub issues
 - **Security**: Report security issues privately
 
@@ -607,9 +657,9 @@ MIT License - see LICENSE file for details.
   - **File Changed**: `python/logan_client.py:571-578`
 - 🔧 **Fixed Hardcoded Path**: Removed hardcoded path in QueryTransformer.ts, added environment variable support
 - 📝 **Updated Configuration Template**: Added `OCI_REGION` and `LOGAN_DEBUG` to Claude Desktop config
-- 📚 **Created USER_GUIDE.md**: Comprehensive guide on asking effective questions
-- 📄 **Created IMPROVEMENTS.md**: Detailed changelog with user guidance
-- 📄 **Created CRITICAL_FIX_README.md**: Explains the critical fix in detail
+- 📚 **Created docs/USER_GUIDE.md**: Comprehensive guide on asking effective questions
+- 📄 **Created docs/IMPROVEMENTS.md**: Detailed changelog with user guidance
+- 📄 **Created docs/CRITICAL_FIX_README.md**: Explains the critical fix in detail
 - 🔍 **Tool Inventory Corrected**: 33 total tools with accurate implementation status (not 19)
 - ✅ **Build Verified**: All changes compiled and tested successfully
 

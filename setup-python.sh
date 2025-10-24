@@ -1,11 +1,12 @@
 #!/bin/bash
 set -e  # Exit on any error
 
-# Setup script for MCP OCI Logan Server Python dependencies v1.2.0
+# Setup script for MCP OCI Logan Server Python dependencies v1.3.0
 # Includes support for query execution, dashboard management, and security analysis
 
-echo "Setting up Python environment for MCP OCI Logan Server v1.2.0..."
+echo "Setting up Python environment for MCP OCI Logan Server v1.3.0..."
 echo "Features: Logan client, Dashboard client, Security analyzer"
+echo "Note: For complete installation, use ./install.sh instead"
 
 # Check if Python 3 is available
 if ! command -v python3 &> /dev/null; then
