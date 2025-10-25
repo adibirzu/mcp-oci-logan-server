@@ -28,6 +28,7 @@ export declare class LogAnalyticsClient {
     private client;
     private provider;
     private config;
+    private configSource;
     private namespace;
     private pythonEnvironment;
     constructor();
@@ -35,6 +36,9 @@ export declare class LogAnalyticsClient {
     private ensurePythonAssets;
     protected initializeClient(): Promise<void>;
     private loadOCIConfig;
+    private getEnvironmentConfigFromProcess;
+    private hasEnvironmentCredentialValues;
+    private initializeAuth;
     protected initializeAuth(): Promise<void>;
     protected getInstancePrincipalsBuilder(): {
         new (): {
@@ -53,6 +57,11 @@ export declare class LogAnalyticsClient {
         };
     }): Promise<any>;
     protected createConfigFileProvider(configurationFilePath: string, profile?: string): oci.common.ConfigFileAuthenticationDetailsProvider;
+    private createEnvironmentAuthProviderIfAvailable;
+    private hasUsableConfigFileCredentials;
+    private getEffectiveEnvironmentConfig;
+    private getPrivateKeyFromConfig;
+    private expandHomeDirectory;
     protected getAuthProvider(): any;
     private isRunningOnOCI;
     /**
