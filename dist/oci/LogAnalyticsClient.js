@@ -292,6 +292,7 @@ export class LogAnalyticsClient {
             return homedir();
         }
         return path.resolve(filePath);
+    }
     getAuthProvider() {
         return this.provider;
     }
