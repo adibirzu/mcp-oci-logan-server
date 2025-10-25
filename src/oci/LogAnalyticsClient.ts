@@ -55,6 +55,7 @@ export class LogAnalyticsClient {
   private client: oci.loganalytics.LogAnalyticsClient | null = null;
   private provider: any = null;
   private config: any = {};
+  private configSource: 'file' | 'env' | 'none' = 'none';
   private namespace: string = '';
   private pythonEnvironment: PythonEnvironmentPaths | null = null;
 
@@ -179,20 +180,42 @@ export class LogAnalyticsClient {
           }
         }
       }
-      
+
       this.config = profiles['DEFAULT'] || profiles[Object.keys(profiles)[0]] || {};
+      this.configSource = Object.keys(this.config).length > 0 ? 'file' : 'none';
     } catch (error) {
       console.error('Failed to load OCI config:', error);
-      // Try environment variables as fallback
+      const envConfig = this.getEnvironmentConfigFromProcess();
       this.config = {
-        user: process.env.OCI_USER_ID,
-        fingerprint: process.env.OCI_FINGERPRINT,
-        tenancy: process.env.OCI_TENANCY_ID,
-        region: process.env.OCI_REGION || 'us-ashburn-1',
-        key_file: process.env.OCI_KEY_FILE,
-        compartment_id: process.env.OCI_COMPARTMENT_ID
+        ...envConfig,
+        region: envConfig.region || 'us-ashburn-1'
       };
+      this.configSource = this.hasEnvironmentCredentialValues(this.config)
+        ? 'env'
+        : 'none';
     }
+  }
+
+  private getEnvironmentConfigFromProcess() {
+    return {
+      user: process.env.OCI_USER_ID,
+      fingerprint: process.env.OCI_FINGERPRINT,
+      tenancy: process.env.OCI_TENANCY_ID,
+      region: process.env.OCI_REGION,
+      key_file: process.env.OCI_KEY_FILE,
+      private_key: process.env.OCI_PRIVATE_KEY || process.env.OCI_PRIVATE_KEY_CONTENT,
+      compartment_id: process.env.OCI_COMPARTMENT_ID
+    };
+  }
+
+  private hasEnvironmentCredentialValues(config: { [key: string]: any }) {
+    return Boolean(
+      config &&
+        config.user &&
+        config.tenancy &&
+        config.fingerprint &&
+        (config.private_key || config.key_file)
+    );
   }
 
   private async initializeAuth() {
@@ -224,6 +247,17 @@ export class LogAnalyticsClient {
         this.config && typeof this.config === 'object' && this.config.profile
           ? this.config.profile
           : undefined;
+
+      const environmentProvider = await this.createEnvironmentAuthProviderIfAvailable();
+      const configFileExists = fsSync.existsSync(configFilePath);
+      const shouldUseEnvironmentProvider =
+        !!environmentProvider &&
+        (!configFileExists || this.configSource === 'env' || !this.hasUsableConfigFileCredentials());
+
+      if (shouldUseEnvironmentProvider) {
+        this.provider = environmentProvider;
+        return;
+      }
 
       this.provider = this.createConfigFileProvider(configFilePath, profile);
     } catch (error) {
@@ -260,6 +294,109 @@ export class LogAnalyticsClient {
       configurationFilePath,
       profile
     );
+  }
+
+  private async createEnvironmentAuthProviderIfAvailable() {
+    const envValues = this.getEffectiveEnvironmentConfig();
+
+    if (!this.hasEnvironmentCredentialValues(envValues)) {
+      return null;
+    }
+
+    const privateKey = await this.getPrivateKeyFromConfig(envValues);
+
+    if (!privateKey) {
+      return null;
+    }
+
+    const region = envValues.region || 'us-ashburn-1';
+    let resolvedRegion: any = region;
+
+    try {
+      const regionFactory = (oci.common as any)?.Region;
+      if (regionFactory && typeof regionFactory.fromRegionId === 'function') {
+        resolvedRegion = regionFactory.fromRegionId(region) || region;
+      }
+    } catch (error) {
+      console.warn('Unable to map region identifier, using raw region string:', error);
+      resolvedRegion = region;
+    }
+
+    try {
+      return new oci.common.SimpleAuthenticationDetailsProvider(
+        envValues.tenancy,
+        envValues.user,
+        envValues.fingerprint,
+        privateKey,
+        undefined,
+        undefined,
+        resolvedRegion
+      );
+    } catch (error) {
+      console.error('Failed to create environment authentication provider:', error);
+      return null;
+    }
+  }
+
+  private hasUsableConfigFileCredentials(): boolean {
+    return (
+      this.configSource === 'file' &&
+      !!(
+        this.config &&
+        typeof this.config === 'object' &&
+        this.config.tenancy &&
+        this.config.user &&
+        this.config.fingerprint &&
+        this.config.key_file
+      )
+    );
+  }
+
+  private getEffectiveEnvironmentConfig() {
+    const processConfig = this.getEnvironmentConfigFromProcess();
+    return {
+      user: processConfig.user || this.config?.user,
+      fingerprint: processConfig.fingerprint || this.config?.fingerprint,
+      tenancy: processConfig.tenancy || this.config?.tenancy,
+      region: processConfig.region || this.config?.region,
+      key_file: processConfig.key_file || this.config?.key_file,
+      private_key: processConfig.private_key || this.config?.private_key,
+      compartment_id: processConfig.compartment_id || this.config?.compartment_id
+    };
+  }
+
+  private async getPrivateKeyFromConfig(config: { [key: string]: any }) {
+    if (config.private_key) {
+      return config.private_key;
+    }
+
+    if (!config.key_file) {
+      return null;
+    }
+
+    try {
+      const resolvedPath = this.expandHomeDirectory(config.key_file);
+      return await fs.readFile(resolvedPath, 'utf8');
+    } catch (error) {
+      console.error('Failed to read OCI private key file:', error);
+      return null;
+    }
+  }
+
+  private expandHomeDirectory(filePath: string) {
+    if (!filePath) {
+      return filePath;
+    }
+
+    if (filePath.startsWith('~/')) {
+      return path.join(homedir(), filePath.slice(2));
+    }
+
+    if (filePath === '~') {
+      return homedir();
+    }
+
+    return path.resolve(filePath);
   }
 
   private async isRunningOnOCI(): Promise<boolean> {
