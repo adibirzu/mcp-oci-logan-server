@@ -38,7 +38,6 @@ export declare class LogAnalyticsClient {
     private loadOCIConfig;
     private getEnvironmentConfigFromProcess;
     private hasEnvironmentCredentialValues;
-    private initializeAuth;
     protected initializeAuth(): Promise<void>;
     protected getInstancePrincipalsBuilder(): {
         new (): {

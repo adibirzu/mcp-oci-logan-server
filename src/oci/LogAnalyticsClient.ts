@@ -218,7 +218,6 @@ export class LogAnalyticsClient {
     );
   }
 
-  private async initializeAuth() {
   protected async initializeAuth() {
     const configFilePath = path.join(homedir(), '.oci', 'config');
 
@@ -432,6 +431,8 @@ export class LogAnalyticsClient {
     }
 
     return path.resolve(filePath);
+  }
+
   protected getAuthProvider() {
     return this.provider;
   }
