@@ -24,6 +24,13 @@ export class QueryTransformer {
     this.loadQueries();
   }
 
+  private normalizePrivilegeAlias(value?: string): string | undefined {
+    if (!value) {
+      return value;
+    }
+    return value === 'privilege-escalation' ? 'privilege_escalation' : value;
+  }
+
   private async loadQueries() {
     if (this.loaded) return;
 
@@ -71,7 +78,17 @@ export class QueryTransformer {
       // Organize by category
       Object.entries(workingData).forEach(([category, queries]) => {
         if (Array.isArray(queries)) {
-          this.loganQueries[category] = queries as LoganQuery[];
+          const normalizedCategory = this.normalizePrivilegeAlias(category) || category;
+          const normalizedQueries = (queries as LoganQuery[]).map(query => ({
+            ...query,
+            category: this.normalizePrivilegeAlias(query.category) || query.category
+          }));
+
+          this.loganQueries[normalizedCategory] = normalizedQueries;
+
+          if (normalizedCategory !== category) {
+            this.loganQueries[category] = normalizedQueries;
+          }
         }
       });
     } catch (error) {
@@ -88,13 +105,6 @@ export class QueryTransformer {
           query: "'Event Name' = 'UserLoginFailed' and Time > dateRelative(24h) | stats count by 'User Name', 'IP Address' | sort -count",
           category: 'security',
           description: 'Find failed login attempts in the last 24 hours'
-        },
-        {
-          id: 'privilege_escalation',
-          name: 'Privilege Escalation Events',
-          query: "'Event Name' contains 'RoleAssign' or 'Event Name' contains 'PrivilegeUse' and Time > dateRelative(24h) | stats count by 'User Name', 'Event Name'",
-          category: 'security',
-          description: 'Detect potential privilege escalation activities'
         },
         {
           id: 'security_alerts_clustering',
@@ -116,6 +126,29 @@ export class QueryTransformer {
           query: "'Log Source' = 'Security Events' and Time > dateRelative(24h) | sequence 'User Name', 'IP Address' maxspan=1h",
           category: 'security',
           description: 'Identify sequences of security events that may indicate coordinated attacks'
+        }
+      ],
+      'privilege_escalation': [
+        {
+          id: 'privilege_escalation_role_assignments',
+          name: 'Role Assignment Escalations',
+          query: "('Event Name' contains 'RoleAssign' or 'Event Name' contains 'PrivilegeUse') and Time > dateRelative(24h) | stats count by 'User Name', 'Event Name' | sort -count",
+          category: 'privilege_escalation',
+          description: 'Detect potential privilege escalation through new role assignments or privilege usage'
+        },
+        {
+          id: 'privilege_escalation_policy_changes',
+          name: 'High-Risk Policy Changes',
+          query: "('Event Name' = 'CreatePolicy' or 'Event Name' = 'UpdatePolicy' or 'Event Name' = 'AttachPolicy' or 'Event Name' = 'CreateDynamicGroup') and Time > dateRelative(7d) | stats count by 'User Name', 'Event Name', 'Policy Name' | sort -count",
+          category: 'privilege_escalation',
+          description: 'Highlight recent policy and dynamic group changes that may elevate privileges'
+        },
+        {
+          id: 'privilege_escalation_account_changes',
+          name: 'Elevated Account Changes',
+          query: "('Event Name' = 'CreateUser' or 'Event Name' = 'UpdateUser' or 'Event Name' contains 'Group') and Time > dateRelative(7d) | stats count by 'User Name', 'Event Name' | sort -count",
+          category: 'privilege_escalation',
+          description: 'Surface newly created or modified accounts that could indicate privilege escalation'
         }
       ],
       'network': [
@@ -276,34 +309,37 @@ export class QueryTransformer {
         }
       ]
     };
+
+    this.loganQueries['privilege-escalation'] = this.loganQueries['privilege_escalation'];
   }
 
   async transformSearchToQuery(searchTerm: string, eventType: string): Promise<string> {
     await this.loadQueries();
 
+    const normalizedEventType = this.normalizePrivilegeAlias(eventType) || eventType;
     const lowerSearchTerm = searchTerm.toLowerCase();
     
     // Security event patterns
-    if (eventType === 'login' || lowerSearchTerm.includes('login') || lowerSearchTerm.includes('authentication')) {
+    if (normalizedEventType === 'login' || lowerSearchTerm.includes('login') || lowerSearchTerm.includes('authentication')) {
       if (lowerSearchTerm.includes('failed') || lowerSearchTerm.includes('unsuccessful')) {
         return "'Event Name' = 'UserLoginFailed' and Time > dateRelative(24h) | stats count by 'User Name', 'IP Address' | sort -count | head 100";
       }
       return "'Event Name' = 'UserLogin' and Time > dateRelative(24h) | stats count by 'User Name', 'IP Address' | sort -count | head 100";
     }
 
-    if (eventType === 'privilege_escalation' || lowerSearchTerm.includes('privilege') || lowerSearchTerm.includes('escalation')) {
+    if (normalizedEventType === 'privilege_escalation' || lowerSearchTerm.includes('privilege') || lowerSearchTerm.includes('escalation')) {
       return "'Event Name' contains 'RoleAssign' or 'Event Name' contains 'PrivilegeUse' and Time > dateRelative(24h) | stats count by 'User Name', 'Event Name' | sort -count | head 100";
     }
 
-    if (eventType === 'network_anomaly' || lowerSearchTerm.includes('network') || lowerSearchTerm.includes('connection')) {
+    if (normalizedEventType === 'network_anomaly' || lowerSearchTerm.includes('network') || lowerSearchTerm.includes('connection')) {
       return "'Log Source' = 'VCN Flow Logs' and Time > dateRelative(24h) | stats count by 'Source IP', 'Destination IP', 'Action' | sort -count | head 100";
     }
 
-    if (eventType === 'malware' || lowerSearchTerm.includes('malware') || lowerSearchTerm.includes('virus')) {
+    if (normalizedEventType === 'malware' || lowerSearchTerm.includes('malware') || lowerSearchTerm.includes('virus')) {
       return "'Event Name' contains 'Malware' or 'Event Name' contains 'Virus' and Time > dateRelative(24h) | stats count by 'Event Name', 'File Path' | sort -count | head 100";
     }
 
-    if (eventType === 'data_exfiltration' || lowerSearchTerm.includes('exfiltration') || lowerSearchTerm.includes('data transfer')) {
+    if (normalizedEventType === 'data_exfiltration' || lowerSearchTerm.includes('exfiltration') || lowerSearchTerm.includes('data transfer')) {
       return "'Log Source' = 'Object Storage Logs' and ('Event Name' = 'GetObject' or 'Event Name' = 'DownloadObject') and Time > dateRelative(24h) | stats sum('Bytes Transferred') as total_bytes by 'User Name', 'IP Address' | sort -total_bytes | head 100";
     }
 
@@ -319,6 +355,7 @@ export class QueryTransformer {
   async getMitreCategoryQuery(category: string): Promise<string> {
     await this.loadQueries();
 
+    const normalizedCategory = this.normalizePrivilegeAlias(category) || category;
     const categoryMappings: { [key: string]: string[] } = {
       'initial_access': ['T1078', 'T1190', 'T1133', 'T1200', 'T1566'],
       'execution': ['T1059', 'T1106', 'T1129', 'T1203', 'T1559'],
@@ -334,7 +371,7 @@ export class QueryTransformer {
       'impact': ['T1485', 'T1486', 'T1490', 'T1498', 'T1529']
     };
 
-    const techniques = categoryMappings[category];
+    const techniques = categoryMappings[normalizedCategory];
     if (!techniques) {
       return "'Log Source' = 'Windows Sysmon Events' and 'Technique_id' is not null and Time > dateRelative(7d) | timestats count as events by 'Technique_id' | sort -events | head 50";
     }
@@ -387,7 +424,8 @@ export class QueryTransformer {
     let result: LoganQuery[] = [];
 
     if (category && category !== 'all') {
-      result = this.loganQueries[category] || [];
+      const normalizedCategory = this.normalizePrivilegeAlias(category) || category;
+      result = this.loganQueries[normalizedCategory] || this.loganQueries[category] || [];
     } else {
       // Get all queries from all categories
       result = Object.values(this.loganQueries).flat();

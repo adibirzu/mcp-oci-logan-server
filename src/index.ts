@@ -110,7 +110,7 @@ class OCILoganMCPServer {
               eventType: {
                 type: 'string',
                 description: 'Type of security event (login, privilege_escalation, network_anomaly, etc.)',
-                enum: ['login', 'privilege_escalation', 'network_anomaly', 'data_exfiltration', 'malware', 'all']
+                enum: ['login', 'privilege_escalation', 'privilege-escalation', 'network_anomaly', 'data_exfiltration', 'malware', 'all']
               },
               timeRange: {
                 type: 'string',
@@ -139,7 +139,7 @@ class OCILoganMCPServer {
               category: {
                 type: 'string',
                 description: 'MITRE tactic category',
-                enum: ['initial_access', 'execution', 'persistence', 'privilege_escalation', 'defense_evasion', 'credential_access', 'discovery', 'lateral_movement', 'collection', 'command_and_control', 'exfiltration', 'impact', 'all']
+                enum: ['initial_access', 'execution', 'persistence', 'privilege_escalation', 'privilege-escalation', 'defense_evasion', 'credential_access', 'discovery', 'lateral_movement', 'collection', 'command_and_control', 'exfiltration', 'impact', 'all']
               },
               timeRange: {
                 type: 'string',
@@ -184,7 +184,7 @@ class OCILoganMCPServer {
               category: {
                 type: 'string',
                 description: 'Query category',
-                enum: ['mitre-attack', 'security', 'network', 'authentication', 'privilege-escalation', 'advanced_analytics', 'statistical_analysis', 'compliance_monitoring', 'all']
+                enum: ['mitre-attack', 'security', 'network', 'authentication', 'privilege_escalation', 'privilege-escalation', 'advanced_analytics', 'statistical_analysis', 'compliance_monitoring', 'all']
               },
               queryName: {
                 type: 'string',
