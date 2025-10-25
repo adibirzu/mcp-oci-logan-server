@@ -135,11 +135,11 @@ export class LogAnalyticsClient {
     return environment;
   }
 
-  private async initializeClient() {
+  protected async initializeClient() {
     try {
       // Try to load OCI config
       await this.loadOCIConfig();
-      
+
       // Initialize authentication provider
       await this.initializeAuth();
       
@@ -195,27 +195,27 @@ export class LogAnalyticsClient {
     }
   }
 
-  private async initializeAuth() {
+  protected async initializeAuth() {
     const configFilePath = path.join(homedir(), '.oci', 'config');
 
     try {
       // Try instance principal first (for OCI compute instances)
       if (await this.isRunningOnOCI()) {
-        const Builder = this.getInstancePrincipalsBuilder();
+        try {
+          const instanceProvider = await this.createInstancePrincipalsProvider();
 
-        if (Builder) {
-          try {
-            this.provider = await this.buildInstancePrincipalsProvider(Builder);
+          if (instanceProvider) {
+            this.provider = instanceProvider;
             return;
-          } catch (instanceAuthError) {
-            console.warn(
-              'Instance principal authentication failed, falling back to config file provider:',
-              instanceAuthError
-            );
           }
-        } else {
+
           console.warn(
-            'Instance principal authentication builder unavailable; falling back to config file provider.'
+            'Instance principal authentication provider unavailable; falling back to config file provider.'
+          );
+        } catch (instanceAuthError) {
+          console.warn(
+            'Instance principal authentication failed, falling back to config file provider:',
+            instanceAuthError
           );
         }
       }
@@ -241,6 +241,40 @@ export class LogAnalyticsClient {
     return (oci.common as any)?.InstancePrincipalsAuthenticationDetailsProviderBuilder ?? null;
   }
 
+  protected getInstancePrincipalsProviderClass():
+    | {
+        builder: () => {
+          build: () => Promise<any>;
+        };
+      }
+    | null {
+    return (oci as any)?.auth?.InstancePrincipalsAuthenticationDetailsProvider ?? null;
+  }
+
+  protected async createInstancePrincipalsProvider(): Promise<any | null> {
+    const providerClass = this.getInstancePrincipalsProviderClass();
+
+    if (providerClass) {
+      const builder = providerClass.builder?.();
+      if (builder && typeof builder.build === 'function') {
+        return builder.build();
+      }
+
+      console.warn(
+        'Instance principal provider class is missing a valid builder; falling back to config file provider.'
+      );
+      return null;
+    }
+
+    const Builder = this.getInstancePrincipalsBuilder();
+
+    if (!Builder) {
+      return null;
+    }
+
+    return this.buildInstancePrincipalsProvider(Builder);
+  }
+
   protected async buildInstancePrincipalsProvider(
     Builder: {
       new (): {
@@ -260,6 +294,10 @@ export class LogAnalyticsClient {
       configurationFilePath,
       profile
     );
+  }
+
+  protected getAuthProvider() {
+    return this.provider;
   }
 
   private async isRunningOnOCI(): Promise<boolean> {
