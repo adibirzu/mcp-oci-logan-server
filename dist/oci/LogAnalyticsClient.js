@@ -135,18 +135,16 @@ export class LogAnalyticsClient {
         try {
             // Try instance principal first (for OCI compute instances)
             if (await this.isRunningOnOCI()) {
-                const Builder = this.getInstancePrincipalsBuilder();
-                if (Builder) {
-                    try {
-                        this.provider = await this.buildInstancePrincipalsProvider(Builder);
+                try {
+                    const instanceProvider = await this.createInstancePrincipalsProvider();
+                    if (instanceProvider) {
+                        this.provider = instanceProvider;
                         return;
                     }
-                    catch (instanceAuthError) {
-                        console.warn('Instance principal authentication failed, falling back to config file provider:', instanceAuthError);
-                    }
+                    console.warn('Instance principal authentication provider unavailable; falling back to config file provider.');
                 }
-                else {
-                    console.warn('Instance principal authentication builder unavailable; falling back to config file provider.');
+                catch (instanceAuthError) {
+                    console.warn('Instance principal authentication failed, falling back to config file provider:', instanceAuthError);
                 }
             }
             const profile = this.config && typeof this.config === 'object' && this.config.profile
@@ -161,6 +159,25 @@ export class LogAnalyticsClient {
     getInstancePrincipalsBuilder() {
         return oci.common?.InstancePrincipalsAuthenticationDetailsProviderBuilder ?? null;
     }
+    getInstancePrincipalsProviderClass() {
+        return oci?.auth?.InstancePrincipalsAuthenticationDetailsProvider ?? null;
+    }
+    async createInstancePrincipalsProvider() {
+        const providerClass = this.getInstancePrincipalsProviderClass();
+        if (providerClass) {
+            const builder = providerClass.builder?.();
+            if (builder && typeof builder.build === 'function') {
+                return builder.build();
+            }
+            console.warn('Instance principal provider class is missing a valid builder; falling back to config file provider.');
+            return null;
+        }
+        const Builder = this.getInstancePrincipalsBuilder();
+        if (!Builder) {
+            return null;
+        }
+        return this.buildInstancePrincipalsProvider(Builder);
+    }
     async buildInstancePrincipalsProvider(Builder) {
         const builderInstance = new Builder();
         if (typeof builderInstance.build !== 'function') {
@@ -170,6 +187,9 @@ export class LogAnalyticsClient {
     }
     createConfigFileProvider(configurationFilePath, profile) {
         return new oci.ConfigFileAuthenticationDetailsProvider(configurationFilePath, profile);
+    }
+    getAuthProvider() {
+        return this.provider;
     }
     async isRunningOnOCI() {
         try {

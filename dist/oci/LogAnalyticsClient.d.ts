@@ -33,20 +33,27 @@ export declare class LogAnalyticsClient {
     constructor();
     private getPythonEnvironment;
     private ensurePythonAssets;
-    private initializeClient;
+    protected initializeClient(): Promise<void>;
     private loadOCIConfig;
-    private initializeAuth;
+    protected initializeAuth(): Promise<void>;
     protected getInstancePrincipalsBuilder(): {
         new (): {
             build: () => Promise<any>;
         };
     } | null;
+    protected getInstancePrincipalsProviderClass(): {
+        builder: () => {
+            build: () => Promise<any>;
+        };
+    } | null;
+    protected createInstancePrincipalsProvider(): Promise<any | null>;
     protected buildInstancePrincipalsProvider(Builder: {
         new (): {
             build: () => Promise<any>;
         };
     }): Promise<any>;
     protected createConfigFileProvider(configurationFilePath: string, profile?: string): oci.common.ConfigFileAuthenticationDetailsProvider;
+    protected getAuthProvider(): any;
     private isRunningOnOCI;
     /**
      * Execute query by calling the standalone Python client
