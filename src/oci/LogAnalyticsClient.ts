@@ -520,7 +520,8 @@ export class LogAnalyticsClient {
       '7d': 10080,
       '30d': 43200,
       '1w': 10080,
-      '1m': 43200
+      '1m': 43200,
+      '90d': 129600
     };
     
     return timeMap[timeRange] || 1440; // Default to 24 hours
