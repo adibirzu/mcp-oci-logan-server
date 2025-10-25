@@ -9,6 +9,7 @@
     "start": "node dist/index.js",
     "dev": "tsc && node dist/index.js",
     "test": "npm run build && node --test dist/__tests__"
+    "test": "npm run build --silent && node --test tests/LogAnalyticsClient.test.mjs"
   },
   "keywords": [
     "mcp",
