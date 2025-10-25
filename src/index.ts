@@ -1576,16 +1576,16 @@ class OCILoganMCPServer {
     } = args;
 
     // Handle compartment selection with same default as queries
-    const compartmentId = providedCompartmentId || '${EXAMPLE_COMPARTMENT_ID}';
+    const compartmentId = providedCompartmentId || DEFAULT_COMPARTMENT_ID;
 
-    if (!providedCompartmentId) {
+    if (!compartmentId) {
       return {
         content: [
           {
             type: 'text',
             text: `❓ **Compartment Selection Required for Dashboards**
 
-**Please specify which OCI compartment to list dashboards from.**
+**No default compartment is configured. Please specify which OCI compartment to list dashboards from.**
 
 **Usage Example:**
 \`\`\`json
@@ -1596,10 +1596,7 @@ class OCILoganMCPServer {
 }
 \`\`\`
 
-**Default Compartment Available:**
-- Production Environment: \`${EXAMPLE_COMPARTMENT_ID}\`
-
-*Different compartments may have different dashboards configured.*`
+*Set the OCI_COMPARTMENT_ID environment variable to reuse a default compartment.*`
           }
         ]
       };
@@ -1783,7 +1780,13 @@ ${JSON.stringify(tilesSummary, null, 2)}
       dashboardConfig = {}
     } = args;
 
-    const compartmentId = providedCompartmentId || '${EXAMPLE_COMPARTMENT_ID}';
+    const compartmentId = providedCompartmentId || DEFAULT_COMPARTMENT_ID;
+
+    if (!compartmentId) {
+      throw new Error(
+        'Compartment ID is required for creating a dashboard. Provide compartmentId or set the OCI_COMPARTMENT_ID environment variable.'
+      );
+    }
 
     if (!displayName) {
       throw new Error('Display name is required for creating a dashboard');
@@ -1883,7 +1886,13 @@ ${removeWidgetIds.length > 0 ? `- Removed ${removeWidgetIds.length} widgets` : '
       widgetType = 'SEARCH'
     } = args;
 
-    const compartmentId = providedCompartmentId || '${EXAMPLE_COMPARTMENT_ID}';
+    const compartmentId = providedCompartmentId || DEFAULT_COMPARTMENT_ID;
+
+    if (!compartmentId) {
+      throw new Error(
+        'Compartment ID is required for creating a saved search. Provide compartmentId or set the OCI_COMPARTMENT_ID environment variable.'
+      );
+    }
 
     if (!displayName || !query) {
       throw new Error('Display name and query are required for creating a saved search');
@@ -1931,7 +1940,13 @@ ${removeWidgetIds.length > 0 ? `- Removed ${removeWidgetIds.length} widgets` : '
       limit = 50
     } = args;
 
-    const compartmentId = providedCompartmentId || '${EXAMPLE_COMPARTMENT_ID}';
+    const compartmentId = providedCompartmentId || DEFAULT_COMPARTMENT_ID;
+
+    if (!compartmentId) {
+      throw new Error(
+        'Compartment ID is required for listing saved searches. Provide compartmentId or set the OCI_COMPARTMENT_ID environment variable.'
+      );
+    }
 
     try {
       const searches = await this.logAnalyticsClient.listSavedSearches({
@@ -2044,7 +2059,13 @@ ${exportJson}
       newDisplayName
     } = args;
 
-    const compartmentId = providedCompartmentId || '${EXAMPLE_COMPARTMENT_ID}';
+    const compartmentId = providedCompartmentId || DEFAULT_COMPARTMENT_ID;
+
+    if (!compartmentId) {
+      throw new Error(
+        'Compartment ID is required for importing a dashboard. Provide compartmentId or set the OCI_COMPARTMENT_ID environment variable.'
+      );
+    }
 
     if (!dashboardJson) {
       throw new Error('Dashboard JSON is required for import');
