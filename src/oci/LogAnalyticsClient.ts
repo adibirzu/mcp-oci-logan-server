@@ -417,7 +417,7 @@ export class LogAnalyticsClient {
     }
   }
 
-  private expandHomeDirectory(filePath: string) {
+  private expandHomeDirectory(filePath: string): string {
     if (!filePath) {
       return filePath;
     }
@@ -433,7 +433,7 @@ export class LogAnalyticsClient {
     return path.resolve(filePath);
   }
 
-  protected getAuthProvider() {
+  protected getAuthProvider(): any {
     return this.provider;
   }
 
