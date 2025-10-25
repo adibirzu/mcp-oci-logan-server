@@ -3,17 +3,77 @@ import { promises as fs } from 'fs';
 import fsSync from 'fs';
 import { homedir } from 'os';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import { spawn } from 'child_process';
+const currentFilePath = fileURLToPath(import.meta.url);
+const currentDirectory = path.dirname(currentFilePath);
+const projectRoot = process.env.MCP_PROJECT_ROOT
+    ? path.resolve(process.env.MCP_PROJECT_ROOT)
+    : path.resolve(currentDirectory, '..', '..');
+const defaultPythonDirectory = process.env.MCP_PYTHON_DIR
+    ? path.resolve(process.env.MCP_PYTHON_DIR)
+    : path.resolve(projectRoot, 'python');
 export class LogAnalyticsClient {
     client = null;
     provider = null;
     config = {};
     namespace = '';
+    pythonEnvironment = null;
     constructor() {
         // Don't wait for initialization in constructor
         this.initializeClient().catch(error => {
             console.error('Failed to initialize OCI client:', error);
         });
+    }
+    getPythonEnvironment() {
+        if (this.pythonEnvironment) {
+            return this.pythonEnvironment;
+        }
+        const configuredPythonDirectory = process.env.MCP_PYTHON_DIR
+            ? path.resolve(process.env.MCP_PYTHON_DIR)
+            : defaultPythonDirectory;
+        const workingDirectory = process.env.MCP_PYTHON_WORKING_DIR
+            ? path.resolve(process.env.MCP_PYTHON_WORKING_DIR)
+            : configuredPythonDirectory;
+        const pythonExecutable = process.env.MCP_PYTHON_EXECUTABLE
+            ? path.resolve(process.env.MCP_PYTHON_EXECUTABLE)
+            : path.resolve(configuredPythonDirectory, 'venv', 'bin', process.platform === 'win32' ? 'python.exe' : 'python');
+        const scripts = {
+            loganClient: process.env.MCP_LOGAN_CLIENT
+                ? path.resolve(process.env.MCP_LOGAN_CLIENT)
+                : path.resolve(configuredPythonDirectory, 'logan_client.py'),
+            dashboardClient: process.env.MCP_DASHBOARD_CLIENT
+                ? path.resolve(process.env.MCP_DASHBOARD_CLIENT)
+                : path.resolve(configuredPythonDirectory, 'dashboard_client.py')
+        };
+        this.pythonEnvironment = {
+            pythonExecutable,
+            workingDirectory,
+            scripts
+        };
+        return this.pythonEnvironment;
+    }
+    ensurePythonAssets(requiredScripts) {
+        const environment = this.getPythonEnvironment();
+        const missingAssets = [];
+        if (!fsSync.existsSync(environment.workingDirectory)) {
+            missingAssets.push(`Python working directory (${environment.workingDirectory})`);
+        }
+        if (!fsSync.existsSync(environment.pythonExecutable)) {
+            missingAssets.push(`Python interpreter (${environment.pythonExecutable})`);
+        }
+        for (const scriptKey of requiredScripts) {
+            const scriptPath = environment.scripts[scriptKey];
+            if (!fsSync.existsSync(scriptPath)) {
+                const label = scriptKey === 'loganClient' ? 'Logan client script' : 'Dashboard client script';
+                missingAssets.push(`${label} (${scriptPath})`);
+            }
+        }
+        if (missingAssets.length > 0) {
+            throw new Error(`Required Python assets are missing: ${missingAssets.join(', ')}. ` +
+                'Run setup-python.sh or set the MCP_PYTHON_* environment variables to valid paths.');
+        }
+        return environment;
     }
     async initializeClient() {
         try {
@@ -71,24 +131,45 @@ export class LogAnalyticsClient {
         }
     }
     async initializeAuth() {
+        const configFilePath = path.join(homedir(), '.oci', 'config');
         try {
             // Try instance principal first (for OCI compute instances)
             if (await this.isRunningOnOCI()) {
-                this.provider = new oci.ConfigFileAuthenticationDetailsProvider();
-                return;
+                const Builder = this.getInstancePrincipalsBuilder();
+                if (Builder) {
+                    try {
+                        this.provider = await this.buildInstancePrincipalsProvider(Builder);
+                        return;
+                    }
+                    catch (instanceAuthError) {
+                        console.warn('Instance principal authentication failed, falling back to config file provider:', instanceAuthError);
+                    }
+                }
+                else {
+                    console.warn('Instance principal authentication builder unavailable; falling back to config file provider.');
+                }
             }
-            // Use config file authentication as default
-            if (this.config.user && this.config.key_file) {
-                this.provider = new oci.ConfigFileAuthenticationDetailsProvider();
-            }
-            else {
-                // Fallback to default config file auth
-                this.provider = new oci.ConfigFileAuthenticationDetailsProvider();
-            }
+            const profile = this.config && typeof this.config === 'object' && this.config.profile
+                ? this.config.profile
+                : undefined;
+            this.provider = this.createConfigFileProvider(configFilePath, profile);
         }
         catch (error) {
             console.error('Failed to initialize authentication:', error);
         }
+    }
+    getInstancePrincipalsBuilder() {
+        return oci.common?.InstancePrincipalsAuthenticationDetailsProviderBuilder ?? null;
+    }
+    async buildInstancePrincipalsProvider(Builder) {
+        const builderInstance = new Builder();
+        if (typeof builderInstance.build !== 'function') {
+            throw new Error('Instance principal builder is missing build method');
+        }
+        return builderInstance.build();
+    }
+    createConfigFileProvider(configurationFilePath, profile) {
+        return new oci.ConfigFileAuthenticationDetailsProvider(configurationFilePath, profile);
     }
     async isRunningOnOCI() {
         try {
@@ -114,11 +195,10 @@ export class LogAnalyticsClient {
             let processedQuery = request.query;
             processedQuery = this.fixQuerySyntax(processedQuery);
             const timeRangeMinutes = this.parseTimeRange(request.timeRange || '24h');
-            // Get the path to our internal Python client using absolute path
-            const pythonScriptPath = '/Users/abirzu/dev/mcp-oci-logan-server/python/logan_client.py';
+            const pythonEnvironment = this.ensurePythonAssets(['loganClient']);
             // Call the internal Python Logan client
             const pythonArgs = [
-                pythonScriptPath,
+                pythonEnvironment.scripts.loganClient,
                 'query',
                 '--query', processedQuery,
                 '--time-period', timeRangeMinutes.toString()
@@ -147,13 +227,13 @@ export class LogAnalyticsClient {
             }
             return new Promise((resolve) => {
                 console.error('MCP DEBUG: About to spawn process with:', {
-                    command: '/Users/abirzu/dev/mcp-oci-logan-server/python/venv/bin/python',
+                    command: pythonEnvironment.pythonExecutable,
                     args: pythonArgs,
-                    cwd: '/Users/abirzu/dev/mcp-oci-logan-server/python'
+                    cwd: pythonEnvironment.workingDirectory
                 });
-                const pythonProcess = spawn('/Users/abirzu/dev/mcp-oci-logan-server/python/venv/bin/python', pythonArgs, {
+                const pythonProcess = spawn(pythonEnvironment.pythonExecutable, pythonArgs, {
                     stdio: ['pipe', 'pipe', 'pipe'],
-                    cwd: '/Users/abirzu/dev/mcp-oci-logan-server/python'
+                    cwd: pythonEnvironment.workingDirectory
                 });
                 let stdout = '';
                 let stderr = '';
@@ -438,9 +518,9 @@ export class LogAnalyticsClient {
         const startTime = Date.now();
         try {
             // Use Python client for dashboard operations
-            const pythonScriptPath = '/Users/abirzu/dev/mcp-oci-logan-server/python/dashboard_client.py';
+            const pythonEnvironment = this.ensurePythonAssets(['dashboardClient']);
             const pythonArgs = [
-                pythonScriptPath,
+                pythonEnvironment.scripts.dashboardClient,
                 'list',
                 '--limit', (request.limit || 50).toString()
             ];
@@ -453,10 +533,10 @@ export class LogAnalyticsClient {
             if (request.lifecycleState) {
                 pythonArgs.push('--lifecycle-state', request.lifecycleState);
             }
-            return new Promise((resolve) => {
-                const pythonProcess = spawn('/Users/abirzu/dev/mcp-oci-logan-server/python/venv/bin/python', pythonArgs, {
+            return await new Promise((resolve) => {
+                const pythonProcess = spawn(pythonEnvironment.pythonExecutable, pythonArgs, {
                     stdio: ['pipe', 'pipe', 'pipe'],
-                    cwd: '/Users/abirzu/dev/mcp-oci-logan-server/python'
+                    cwd: pythonEnvironment.workingDirectory
                 });
                 let stdout = '';
                 let stderr = '';
@@ -518,19 +598,19 @@ export class LogAnalyticsClient {
     async getDashboard(request) {
         const startTime = Date.now();
         try {
-            const pythonScriptPath = '/Users/abirzu/dev/mcp-oci-logan-server/python/dashboard_client.py';
+            const pythonEnvironment = this.ensurePythonAssets(['dashboardClient']);
             const pythonArgs = [
-                pythonScriptPath,
+                pythonEnvironment.scripts.dashboardClient,
                 'get',
                 '--dashboard-id', request.dashboardId
             ];
             if (request.compartmentId) {
                 pythonArgs.push('--compartment-id', request.compartmentId);
             }
-            return new Promise((resolve) => {
-                const pythonProcess = spawn('/Users/abirzu/dev/mcp-oci-logan-server/python/venv/bin/python', pythonArgs, {
+            return await new Promise((resolve) => {
+                const pythonProcess = spawn(pythonEnvironment.pythonExecutable, pythonArgs, {
                     stdio: ['pipe', 'pipe', 'pipe'],
-                    cwd: '/Users/abirzu/dev/mcp-oci-logan-server/python'
+                    cwd: pythonEnvironment.workingDirectory
                 });
                 let stdout = '';
                 let stderr = '';
@@ -676,61 +756,71 @@ export class LogAnalyticsClient {
     }
     async listLogSources(request) {
         // Use Management API instead of query
-        return new Promise((resolve) => {
-            const pythonPath = '/Users/abirzu/dev/mcp-oci-logan-server/python/venv/bin/python';
-            const scriptPath = '/Users/abirzu/dev/mcp-oci-logan-server/python/logan_client.py';
-            const args = [scriptPath, 'list_sources'];
-            if (request.compartmentId)
-                args.push('--compartment-id', request.compartmentId);
-            if (request.displayName)
-                args.push('--display-name', request.displayName);
-            if (request.sourceType)
-                args.push('--source-type', request.sourceType);
-            if (request.limit)
-                args.push('--limit', request.limit.toString());
-            const pythonProcess = spawn(pythonPath, args, {
-                cwd: '/Users/abirzu/dev/mcp-oci-logan-server/python'
-            });
-            let stdout = '';
-            let stderr = '';
-            pythonProcess.stdout.on('data', (data) => {
-                stdout += data.toString();
-            });
-            pythonProcess.stderr.on('data', (data) => {
-                stderr += data.toString();
-            });
-            pythonProcess.on('close', (code) => {
-                if (code === 0) {
-                    try {
-                        const result = JSON.parse(stdout);
-                        resolve({
-                            success: result.success,
-                            totalCount: result.total_count || 0,
-                            data: result.results || [],
-                            executionTime: result.execution_time || 0
-                        });
+        try {
+            const pythonEnvironment = this.ensurePythonAssets(['loganClient']);
+            return await new Promise((resolve) => {
+                const args = [pythonEnvironment.scripts.loganClient, 'list_sources'];
+                if (request.compartmentId)
+                    args.push('--compartment-id', request.compartmentId);
+                if (request.displayName)
+                    args.push('--display-name', request.displayName);
+                if (request.sourceType)
+                    args.push('--source-type', request.sourceType);
+                if (request.limit)
+                    args.push('--limit', request.limit.toString());
+                const pythonProcess = spawn(pythonEnvironment.pythonExecutable, args, {
+                    cwd: pythonEnvironment.workingDirectory
+                });
+                let stdout = '';
+                let stderr = '';
+                pythonProcess.stdout.on('data', (data) => {
+                    stdout += data.toString();
+                });
+                pythonProcess.stderr.on('data', (data) => {
+                    stderr += data.toString();
+                });
+                pythonProcess.on('close', (code) => {
+                    if (code === 0) {
+                        try {
+                            const result = JSON.parse(stdout);
+                            resolve({
+                                success: result.success,
+                                totalCount: result.total_count || 0,
+                                data: result.results || [],
+                                executionTime: result.execution_time || 0
+                            });
+                        }
+                        catch (parseError) {
+                            resolve({
+                                success: false,
+                                error: `Failed to parse response: ${parseError}`,
+                                totalCount: 0,
+                                data: [],
+                                executionTime: 0
+                            });
+                        }
                     }
-                    catch (parseError) {
+                    else {
                         resolve({
                             success: false,
-                            error: `Failed to parse response: ${parseError}`,
+                            error: `Python process failed: ${stderr}`,
                             totalCount: 0,
                             data: [],
                             executionTime: 0
                         });
                     }
-                }
-                else {
-                    resolve({
-                        success: false,
-                        error: `Python process failed: ${stderr}`,
-                        totalCount: 0,
-                        data: [],
-                        executionTime: 0
-                    });
-                }
+                });
             });
-        });
+        }
+        catch (error) {
+            return {
+                success: false,
+                error: error instanceof Error ? error.message : 'Unknown error occurred',
+                totalCount: 0,
+                data: [],
+                executionTime: 0
+            };
+        }
     }
     async getLogSourceDetails(request) {
         // Execute query to get details about a specific log source
@@ -743,119 +833,139 @@ export class LogAnalyticsClient {
     }
     async listActiveLogSources(request) {
         // Use hybrid approach: Management API for sources + Query API for counts
-        return new Promise((resolve) => {
-            const pythonPath = '/Users/abirzu/dev/mcp-oci-logan-server/python/venv/bin/python';
-            const scriptPath = '/Users/abirzu/dev/mcp-oci-logan-server/python/logan_client.py';
-            const args = [scriptPath, 'list_active_sources'];
-            if (request.compartmentId)
-                args.push('--compartment-id', request.compartmentId);
-            if (request.timePeriodMinutes)
-                args.push('--time-period', request.timePeriodMinutes.toString());
-            if (request.limit)
-                args.push('--limit', request.limit.toString());
-            const pythonProcess = spawn(pythonPath, args, {
-                cwd: '/Users/abirzu/dev/mcp-oci-logan-server/python'
-            });
-            let stdout = '';
-            let stderr = '';
-            pythonProcess.stdout.on('data', (data) => {
-                stdout += data.toString();
-            });
-            pythonProcess.stderr.on('data', (data) => {
-                stderr += data.toString();
-            });
-            pythonProcess.on('close', (code) => {
-                if (code === 0) {
-                    try {
-                        const result = JSON.parse(stdout);
-                        resolve({
-                            success: result.success,
-                            totalCount: result.total_count || 0,
-                            data: result.results || [],
-                            executionTime: result.execution_time || 0,
-                            metadata: {
-                                active_sources: result.active_sources,
-                                time_period: result.time_period
-                            }
-                        });
+        try {
+            const pythonEnvironment = this.ensurePythonAssets(['loganClient']);
+            return await new Promise((resolve) => {
+                const args = [pythonEnvironment.scripts.loganClient, 'list_active_sources'];
+                if (request.compartmentId)
+                    args.push('--compartment-id', request.compartmentId);
+                if (request.timePeriodMinutes)
+                    args.push('--time-period', request.timePeriodMinutes.toString());
+                if (request.limit)
+                    args.push('--limit', request.limit.toString());
+                const pythonProcess = spawn(pythonEnvironment.pythonExecutable, args, {
+                    cwd: pythonEnvironment.workingDirectory
+                });
+                let stdout = '';
+                let stderr = '';
+                pythonProcess.stdout.on('data', (data) => {
+                    stdout += data.toString();
+                });
+                pythonProcess.stderr.on('data', (data) => {
+                    stderr += data.toString();
+                });
+                pythonProcess.on('close', (code) => {
+                    if (code === 0) {
+                        try {
+                            const result = JSON.parse(stdout);
+                            resolve({
+                                success: result.success,
+                                totalCount: result.total_count || 0,
+                                data: result.results || [],
+                                executionTime: result.execution_time || 0,
+                                metadata: {
+                                    active_sources: result.active_sources,
+                                    time_period: result.time_period
+                                }
+                            });
+                        }
+                        catch (parseError) {
+                            resolve({
+                                success: false,
+                                error: `Failed to parse response: ${parseError}`,
+                                totalCount: 0,
+                                data: [],
+                                executionTime: 0
+                            });
+                        }
                     }
-                    catch (parseError) {
+                    else {
                         resolve({
                             success: false,
-                            error: `Failed to parse response: ${parseError}`,
+                            error: `Python process failed: ${stderr}`,
                             totalCount: 0,
                             data: [],
                             executionTime: 0
                         });
                     }
-                }
-                else {
-                    resolve({
-                        success: false,
-                        error: `Python process failed: ${stderr}`,
-                        totalCount: 0,
-                        data: [],
-                        executionTime: 0
-                    });
-                }
+                });
             });
-        });
+        }
+        catch (error) {
+            return {
+                success: false,
+                error: error instanceof Error ? error.message : 'Unknown error occurred',
+                totalCount: 0,
+                data: [],
+                executionTime: 0
+            };
+        }
     }
     async listLogFields(request) {
         // Use Management API instead of query
-        return new Promise((resolve) => {
-            const pythonPath = '/Users/abirzu/dev/mcp-oci-logan-server/python/venv/bin/python';
-            const scriptPath = '/Users/abirzu/dev/mcp-oci-logan-server/python/logan_client.py';
-            const args = [scriptPath, 'list_fields'];
-            if (request.fieldName)
-                args.push('--display-name', request.fieldName);
-            if (request.isSystem !== undefined)
-                args.push('--is-system', request.isSystem.toString());
-            if (request.limit)
-                args.push('--limit', request.limit.toString());
-            const pythonProcess = spawn(pythonPath, args, {
-                cwd: '/Users/abirzu/dev/mcp-oci-logan-server/python'
-            });
-            let stdout = '';
-            let stderr = '';
-            pythonProcess.stdout.on('data', (data) => {
-                stdout += data.toString();
-            });
-            pythonProcess.stderr.on('data', (data) => {
-                stderr += data.toString();
-            });
-            pythonProcess.on('close', (code) => {
-                if (code === 0) {
-                    try {
-                        const result = JSON.parse(stdout);
-                        resolve({
-                            success: result.success,
-                            totalCount: result.total_count || 0,
-                            data: result.results || [],
-                            executionTime: result.execution_time || 0
-                        });
+        try {
+            const pythonEnvironment = this.ensurePythonAssets(['loganClient']);
+            return await new Promise((resolve) => {
+                const args = [pythonEnvironment.scripts.loganClient, 'list_fields'];
+                if (request.fieldName)
+                    args.push('--display-name', request.fieldName);
+                if (request.isSystem !== undefined)
+                    args.push('--is-system', request.isSystem.toString());
+                if (request.limit)
+                    args.push('--limit', request.limit.toString());
+                const pythonProcess = spawn(pythonEnvironment.pythonExecutable, args, {
+                    cwd: pythonEnvironment.workingDirectory
+                });
+                let stdout = '';
+                let stderr = '';
+                pythonProcess.stdout.on('data', (data) => {
+                    stdout += data.toString();
+                });
+                pythonProcess.stderr.on('data', (data) => {
+                    stderr += data.toString();
+                });
+                pythonProcess.on('close', (code) => {
+                    if (code === 0) {
+                        try {
+                            const result = JSON.parse(stdout);
+                            resolve({
+                                success: result.success,
+                                totalCount: result.total_count || 0,
+                                data: result.results || [],
+                                executionTime: result.execution_time || 0
+                            });
+                        }
+                        catch (parseError) {
+                            resolve({
+                                success: false,
+                                error: `Failed to parse response: ${parseError}`,
+                                totalCount: 0,
+                                data: [],
+                                executionTime: 0
+                            });
+                        }
                     }
-                    catch (parseError) {
+                    else {
                         resolve({
                             success: false,
-                            error: `Failed to parse response: ${parseError}`,
+                            error: `Python process failed: ${stderr}`,
                             totalCount: 0,
                             data: [],
                             executionTime: 0
                         });
                     }
-                }
-                else {
-                    resolve({
-                        success: false,
-                        error: `Python process failed: ${stderr}`,
-                        totalCount: 0,
-                        data: [],
-                        executionTime: 0
-                    });
-                }
+                });
             });
-        });
+        }
+        catch (error) {
+            return {
+                success: false,
+                error: error instanceof Error ? error.message : 'Unknown error occurred',
+                totalCount: 0,
+                data: [],
+                executionTime: 0
+            };
+        }
     }
     async getFieldDetails(request) {
         // Get samples of the field to understand its usage
@@ -882,59 +992,69 @@ export class LogAnalyticsClient {
     }
     async listEntities(request) {
         // Use Management API instead of query
-        return new Promise((resolve) => {
-            const pythonPath = '/Users/abirzu/dev/mcp-oci-logan-server/python/venv/bin/python';
-            const scriptPath = '/Users/abirzu/dev/mcp-oci-logan-server/python/logan_client.py';
-            const args = [scriptPath, 'list_entities'];
-            if (request.compartmentId)
-                args.push('--compartment-id', request.compartmentId);
-            if (request.entityType)
-                args.push('--entity-type', request.entityType);
-            if (request.limit)
-                args.push('--limit', request.limit.toString());
-            const pythonProcess = spawn(pythonPath, args, {
-                cwd: '/Users/abirzu/dev/mcp-oci-logan-server/python'
-            });
-            let stdout = '';
-            let stderr = '';
-            pythonProcess.stdout.on('data', (data) => {
-                stdout += data.toString();
-            });
-            pythonProcess.stderr.on('data', (data) => {
-                stderr += data.toString();
-            });
-            pythonProcess.on('close', (code) => {
-                if (code === 0) {
-                    try {
-                        const result = JSON.parse(stdout);
-                        resolve({
-                            success: result.success,
-                            totalCount: result.total_count || 0,
-                            data: result.results || [],
-                            executionTime: result.execution_time || 0
-                        });
+        try {
+            const pythonEnvironment = this.ensurePythonAssets(['loganClient']);
+            return await new Promise((resolve) => {
+                const args = [pythonEnvironment.scripts.loganClient, 'list_entities'];
+                if (request.compartmentId)
+                    args.push('--compartment-id', request.compartmentId);
+                if (request.entityType)
+                    args.push('--entity-type', request.entityType);
+                if (request.limit)
+                    args.push('--limit', request.limit.toString());
+                const pythonProcess = spawn(pythonEnvironment.pythonExecutable, args, {
+                    cwd: pythonEnvironment.workingDirectory
+                });
+                let stdout = '';
+                let stderr = '';
+                pythonProcess.stdout.on('data', (data) => {
+                    stdout += data.toString();
+                });
+                pythonProcess.stderr.on('data', (data) => {
+                    stderr += data.toString();
+                });
+                pythonProcess.on('close', (code) => {
+                    if (code === 0) {
+                        try {
+                            const result = JSON.parse(stdout);
+                            resolve({
+                                success: result.success,
+                                totalCount: result.total_count || 0,
+                                data: result.results || [],
+                                executionTime: result.execution_time || 0
+                            });
+                        }
+                        catch (parseError) {
+                            resolve({
+                                success: false,
+                                error: `Failed to parse response: ${parseError}`,
+                                totalCount: 0,
+                                data: [],
+                                executionTime: 0
+                            });
+                        }
                     }
-                    catch (parseError) {
+                    else {
                         resolve({
                             success: false,
-                            error: `Failed to parse response: ${parseError}`,
+                            error: `Python process failed: ${stderr}`,
                             totalCount: 0,
                             data: [],
                             executionTime: 0
                         });
                     }
-                }
-                else {
-                    resolve({
-                        success: false,
-                        error: `Python process failed: ${stderr}`,
-                        totalCount: 0,
-                        data: [],
-                        executionTime: 0
-                    });
-                }
+                });
             });
-        });
+        }
+        catch (error) {
+            return {
+                success: false,
+                error: error instanceof Error ? error.message : 'Unknown error occurred',
+                totalCount: 0,
+                data: [],
+                executionTime: 0
+            };
+        }
     }
     async getStorageUsage(request) {
         // Query for storage statistics
@@ -947,113 +1067,133 @@ export class LogAnalyticsClient {
     }
     async listParsers(request) {
         // Use Management API instead of query
-        return new Promise((resolve) => {
-            const pythonPath = '/Users/abirzu/dev/mcp-oci-logan-server/python/venv/bin/python';
-            const scriptPath = '/Users/abirzu/dev/mcp-oci-logan-server/python/logan_client.py';
-            const args = [scriptPath, 'list_parsers'];
-            if (request.displayName)
-                args.push('--display-name', request.displayName);
-            if (request.isSystem !== undefined)
-                args.push('--is-system', request.isSystem.toString());
-            if (request.limit)
-                args.push('--limit', request.limit.toString());
-            const pythonProcess = spawn(pythonPath, args, {
-                cwd: '/Users/abirzu/dev/mcp-oci-logan-server/python'
-            });
-            let stdout = '';
-            let stderr = '';
-            pythonProcess.stdout.on('data', (data) => {
-                stdout += data.toString();
-            });
-            pythonProcess.stderr.on('data', (data) => {
-                stderr += data.toString();
-            });
-            pythonProcess.on('close', (code) => {
-                if (code === 0) {
-                    try {
-                        const result = JSON.parse(stdout);
-                        resolve({
-                            success: result.success,
-                            totalCount: result.total_count || 0,
-                            data: result.results || [],
-                            executionTime: result.execution_time || 0
-                        });
+        try {
+            const pythonEnvironment = this.ensurePythonAssets(['loganClient']);
+            return await new Promise((resolve) => {
+                const args = [pythonEnvironment.scripts.loganClient, 'list_parsers'];
+                if (request.displayName)
+                    args.push('--display-name', request.displayName);
+                if (request.isSystem !== undefined)
+                    args.push('--is-system', request.isSystem.toString());
+                if (request.limit)
+                    args.push('--limit', request.limit.toString());
+                const pythonProcess = spawn(pythonEnvironment.pythonExecutable, args, {
+                    cwd: pythonEnvironment.workingDirectory
+                });
+                let stdout = '';
+                let stderr = '';
+                pythonProcess.stdout.on('data', (data) => {
+                    stdout += data.toString();
+                });
+                pythonProcess.stderr.on('data', (data) => {
+                    stderr += data.toString();
+                });
+                pythonProcess.on('close', (code) => {
+                    if (code === 0) {
+                        try {
+                            const result = JSON.parse(stdout);
+                            resolve({
+                                success: result.success,
+                                totalCount: result.total_count || 0,
+                                data: result.results || [],
+                                executionTime: result.execution_time || 0
+                            });
+                        }
+                        catch (parseError) {
+                            resolve({
+                                success: false,
+                                error: `Failed to parse response: ${parseError}`,
+                                totalCount: 0,
+                                data: [],
+                                executionTime: 0
+                            });
+                        }
                     }
-                    catch (parseError) {
+                    else {
                         resolve({
                             success: false,
-                            error: `Failed to parse response: ${parseError}`,
+                            error: `Python process failed: ${stderr}`,
                             totalCount: 0,
                             data: [],
                             executionTime: 0
                         });
                     }
-                }
-                else {
-                    resolve({
-                        success: false,
-                        error: `Python process failed: ${stderr}`,
-                        totalCount: 0,
-                        data: [],
-                        executionTime: 0
-                    });
-                }
+                });
             });
-        });
+        }
+        catch (error) {
+            return {
+                success: false,
+                error: error instanceof Error ? error.message : 'Unknown error occurred',
+                totalCount: 0,
+                data: [],
+                executionTime: 0
+            };
+        }
     }
     async listLabels(request) {
         // Use Management API instead of query
-        return new Promise((resolve) => {
-            const pythonPath = '/Users/abirzu/dev/mcp-oci-logan-server/python/venv/bin/python';
-            const scriptPath = '/Users/abirzu/dev/mcp-oci-logan-server/python/logan_client.py';
-            const args = [scriptPath, 'list_labels'];
-            if (request.displayName)
-                args.push('--display-name', request.displayName);
-            if (request.limit)
-                args.push('--limit', request.limit.toString());
-            const pythonProcess = spawn(pythonPath, args, {
-                cwd: '/Users/abirzu/dev/mcp-oci-logan-server/python'
-            });
-            let stdout = '';
-            let stderr = '';
-            pythonProcess.stdout.on('data', (data) => {
-                stdout += data.toString();
-            });
-            pythonProcess.stderr.on('data', (data) => {
-                stderr += data.toString();
-            });
-            pythonProcess.on('close', (code) => {
-                if (code === 0) {
-                    try {
-                        const result = JSON.parse(stdout);
-                        resolve({
-                            success: result.success,
-                            totalCount: result.total_count || 0,
-                            data: result.results || [],
-                            executionTime: result.execution_time || 0
-                        });
+        try {
+            const pythonEnvironment = this.ensurePythonAssets(['loganClient']);
+            return await new Promise((resolve) => {
+                const args = [pythonEnvironment.scripts.loganClient, 'list_labels'];
+                if (request.displayName)
+                    args.push('--display-name', request.displayName);
+                if (request.limit)
+                    args.push('--limit', request.limit.toString());
+                const pythonProcess = spawn(pythonEnvironment.pythonExecutable, args, {
+                    cwd: pythonEnvironment.workingDirectory
+                });
+                let stdout = '';
+                let stderr = '';
+                pythonProcess.stdout.on('data', (data) => {
+                    stdout += data.toString();
+                });
+                pythonProcess.stderr.on('data', (data) => {
+                    stderr += data.toString();
+                });
+                pythonProcess.on('close', (code) => {
+                    if (code === 0) {
+                        try {
+                            const result = JSON.parse(stdout);
+                            resolve({
+                                success: result.success,
+                                totalCount: result.total_count || 0,
+                                data: result.results || [],
+                                executionTime: result.execution_time || 0
+                            });
+                        }
+                        catch (parseError) {
+                            resolve({
+                                success: false,
+                                error: `Failed to parse response: ${parseError}`,
+                                totalCount: 0,
+                                data: [],
+                                executionTime: 0
+                            });
+                        }
                     }
-                    catch (parseError) {
+                    else {
                         resolve({
                             success: false,
-                            error: `Failed to parse response: ${parseError}`,
+                            error: `Python process failed: ${stderr}`,
                             totalCount: 0,
                             data: [],
                             executionTime: 0
                         });
                     }
-                }
-                else {
-                    resolve({
-                        success: false,
-                        error: `Python process failed: ${stderr}`,
-                        totalCount: 0,
-                        data: [],
-                        executionTime: 0
-                    });
-                }
+                });
             });
-        });
+        }
+        catch (error) {
+            return {
+                success: false,
+                error: error instanceof Error ? error.message : 'Unknown error occurred',
+                totalCount: 0,
+                data: [],
+                executionTime: 0
+            };
+        }
     }
     async queryRecentUploads(request) {
         // Query for upload activity
