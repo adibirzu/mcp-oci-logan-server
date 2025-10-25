@@ -1,3 +1,4 @@
+import * as oci from 'oci-sdk';
 export interface QueryRequest {
     query: string;
     timeRange?: string;
@@ -28,10 +29,24 @@ export declare class LogAnalyticsClient {
     private provider;
     private config;
     private namespace;
+    private pythonEnvironment;
     constructor();
+    private getPythonEnvironment;
+    private ensurePythonAssets;
     private initializeClient;
     private loadOCIConfig;
     private initializeAuth;
+    protected getInstancePrincipalsBuilder(): {
+        new (): {
+            build: () => Promise<any>;
+        };
+    } | null;
+    protected buildInstancePrincipalsProvider(Builder: {
+        new (): {
+            build: () => Promise<any>;
+        };
+    }): Promise<any>;
+    protected createConfigFileProvider(configurationFilePath: string, profile?: string): oci.common.ConfigFileAuthenticationDetailsProvider;
     private isRunningOnOCI;
     /**
      * Execute query by calling the standalone Python client

@@ -196,23 +196,70 @@ export class LogAnalyticsClient {
   }
 
   private async initializeAuth() {
+    const configFilePath = path.join(homedir(), '.oci', 'config');
+
     try {
       // Try instance principal first (for OCI compute instances)
       if (await this.isRunningOnOCI()) {
-        this.provider = new oci.ConfigFileAuthenticationDetailsProvider();
-        return;
+        const Builder = this.getInstancePrincipalsBuilder();
+
+        if (Builder) {
+          try {
+            this.provider = await this.buildInstancePrincipalsProvider(Builder);
+            return;
+          } catch (instanceAuthError) {
+            console.warn(
+              'Instance principal authentication failed, falling back to config file provider:',
+              instanceAuthError
+            );
+          }
+        } else {
+          console.warn(
+            'Instance principal authentication builder unavailable; falling back to config file provider.'
+          );
+        }
       }
 
-      // Use config file authentication as default
-      if (this.config.user && this.config.key_file) {
-        this.provider = new oci.ConfigFileAuthenticationDetailsProvider();
-      } else {
-        // Fallback to default config file auth
-        this.provider = new oci.ConfigFileAuthenticationDetailsProvider();
-      }
+      const profile =
+        this.config && typeof this.config === 'object' && this.config.profile
+          ? this.config.profile
+          : undefined;
+
+      this.provider = this.createConfigFileProvider(configFilePath, profile);
     } catch (error) {
       console.error('Failed to initialize authentication:', error);
     }
+  }
+
+  protected getInstancePrincipalsBuilder():
+    | {
+        new (): {
+          build: () => Promise<any>;
+        };
+      }
+    | null {
+    return (oci.common as any)?.InstancePrincipalsAuthenticationDetailsProviderBuilder ?? null;
+  }
+
+  protected async buildInstancePrincipalsProvider(
+    Builder: {
+      new (): {
+        build: () => Promise<any>;
+      };
+    }
+  ): Promise<any> {
+    const builderInstance = new Builder();
+    if (typeof builderInstance.build !== 'function') {
+      throw new Error('Instance principal builder is missing build method');
+    }
+    return builderInstance.build();
+  }
+
+  protected createConfigFileProvider(configurationFilePath: string, profile?: string) {
+    return new oci.ConfigFileAuthenticationDetailsProvider(
+      configurationFilePath,
+      profile
+    );
   }
 
   private async isRunningOnOCI(): Promise<boolean> {
