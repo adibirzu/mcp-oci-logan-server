@@ -15,6 +15,7 @@ export declare class QueryTransformer {
     private loganQueries;
     private loaded;
     constructor();
+    private normalizePrivilegeAlias;
     private loadQueries;
     private loadFromLoganProject;
     private loadDefaultQueries;
