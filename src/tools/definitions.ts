@@ -247,6 +247,36 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     }
   },
   {
+    name: 'oci_logan_usage_guide',
+    description: 'Return a concise usage guide and best-practice tips for Logan MCP tools',
+    annotations: { ...READ_ONLY, title: 'Usage Guide' },
+    inputSchema: {
+      type: 'object',
+      properties: {
+        format: {
+          type: 'string',
+          enum: ['markdown', 'json'],
+          default: 'markdown'
+        }
+      }
+    }
+  },
+  {
+    name: 'oci_logan_health',
+    description: 'Health/status check for the OCI Logan MCP server (no side effects)',
+    annotations: { ...READ_ONLY, title: 'Health Check' },
+    inputSchema: {
+      type: 'object',
+      properties: {
+        detail: {
+          type: 'boolean',
+          description: 'Return extended detail if true',
+          default: false
+        }
+      }
+    }
+  },
+  {
     name: 'oci_logan_check_connection',
     description: 'Check OCI Logging Analytics connection and authentication',
     annotations: { ...READ_ONLY, title: 'Check OCI Connection' },

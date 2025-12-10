@@ -169,6 +169,40 @@ python python/logan_client.py --help
 node test-server.js
 ```
 
+### Optional: Python FastMCP server (stdio-safe)
+
+If you prefer a pure Python MCP server using FastMCP (no Node runtime) and you have Python 3.10+:
+
+```bash
+# From repo root
+./setup-python.sh  # sets up python/venv and installs requirements (includes mcp[cli])
+source python/venv/bin/activate
+python python/fastmcp_server.py
+```
+
+Claude Desktop config example:
+
+```json
+{
+  "mcpServers": {
+    "oci-logan-fastmcp": {
+      "command": "python",
+      "args": ["/ABSOLUTE/PATH/TO/mcp-oci-logan-server/python/fastmcp_server.py"],
+      "env": {
+        "LOGAN_COMPARTMENT_ID": "ocid1.compartment.oc1..your-id",
+        "LOGAN_REGION": "us-ashburn-1",
+        "LOGAN_DEBUG": "false"
+      }
+    }
+  }
+}
+```
+
+Notes:
+- Uses stdio-safe logging (stderr/file only) and snake_case tool names.
+- Blocking OCI calls are offloaded to threads for responsiveness.
+- Set OCI config via `~/.oci/config` or environment variables as in the Node flow.
+
 ### Quick Start for Updates
 
 If you already have everything installed and just need to rebuild:

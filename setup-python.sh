@@ -6,6 +6,7 @@ set -e  # Exit on any error
 
 echo "Setting up Python environment for MCP OCI Logan Server v1.3.0..."
 echo "Features: Logan client, Dashboard client, Security analyzer"
+echo "Optional: FastMCP server (requires Python 3.10+)"
 echo "Note: For complete installation, use ./install.sh instead"
 
 # Check if Python 3 is available
@@ -72,12 +73,26 @@ echo "  • dashboard_client.py - Dashboard management client"
 echo "  • security_analyzer.py - Security event analysis"
 echo "  • query_mapper.py - Query mapping utilities"
 echo "  • query_validator.py - Query validation"
+python - <<'PY'
+import sys
+if sys.version_info >= (3, 10):
+    print("  • fastmcp_server.py - FastMCP stdio server (Python 3.10+)")
+else:
+    print("  • fastmcp_server.py - FastMCP stdio server (requires Python 3.10+, skipped install if lower)")
+PY
 echo ""
 echo "🧪 To test the Python clients:"
 echo "  cd python"
 echo "  source venv/bin/activate"
 echo "  python logan_client.py --help"
 echo "  python dashboard_client.py --help"
+python - <<'PY'
+import sys
+if sys.version_info >= (3, 10):
+    print("  python fastmcp_server.py --help  # stdio server starts when invoked")
+else:
+    print("  # FastMCP server requires Python 3.10+, not installed on this interpreter")
+PY
 echo ""
 echo "📋 Prerequisites checklist:"
 echo "  ✅ Python 3.8+ installed: $(python3 --version)"

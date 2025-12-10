@@ -9,6 +9,9 @@ httpx>=0.27.0
 # Input validation (Pydantic v2)
 pydantic>=2.0.0
 
+# MCP FastMCP server support (Python 3.10+)
+mcp[cli]>=1.2.0; python_version >= "3.10"
+
 # Testing
 pytest>=8.0.0
 pytest-asyncio>=0.23.0

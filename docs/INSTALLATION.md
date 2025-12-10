@@ -30,7 +30,7 @@ The installer handles everything automatically:
 - ✅ Installs all dependencies
 - ✅ Sets up Python virtual environment
 - ✅ Builds TypeScript code
-- ✅ Tests the installation
+- ✅ Tests the installation (Node build + Python/FastMCP compile checks)
 - ✅ Optionally configures Claude Desktop
 - ✅ Verifies all 33 MCP tools
 
@@ -94,8 +94,9 @@ The installer will guide you through:
    - Verifies compilation succeeded
 
 4. **Testing**
-   - Tests Python clients
-   - Verifies MCP server can load
+   - Compiles Python clients (syntax-only, no stdout)
+   - Compiles FastMCP server (stdio-safe)
+   - Verifies MCP server module structure without running it
    - Shows feature verification
 
 5. **Claude Desktop Configuration**
@@ -120,6 +121,7 @@ The installer will guide you through:
 - `oci` - OCI Python SDK (v2.135.1+)
 - `requests` - HTTP client
 - `python-dotenv` - Environment variables
+- `mcp[cli]` - FastMCP stdio server support (only when Python ≥ 3.10)
 
 **Compiled Output** (in `dist/`):
 - `index.js` - Main MCP server
@@ -197,11 +199,20 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
   "mcpServers": {
     "oci-logan": {
       "command": "node",
-      "args": ["/Users/YOUR_USERNAME/mcp-oci-logan-server/dist/index.js"],
+      "args": ["/ABSOLUTE/PATH/TO/mcp-oci-logan-server/dist/index.js"],
       "env": {
         "OCI_COMPARTMENT_ID": "ocid1.compartment.oc1..your-compartment-id",
         "OCI_REGION": "us-ashburn-1",
         "SUPPRESS_LABEL_WARNING": "True",
+        "LOGAN_DEBUG": "false"
+      }
+    },
+    "oci-logan-fastmcp": {
+      "command": "python",
+      "args": ["/ABSOLUTE/PATH/TO/mcp-oci-logan-server/python/fastmcp_server.py"],
+      "env": {
+        "LOGAN_COMPARTMENT_ID": "ocid1.compartment.oc1..your-compartment-id",
+        "LOGAN_REGION": "us-ashburn-1",
         "LOGAN_DEBUG": "false"
       }
     }
@@ -214,11 +225,20 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
 ### Step 7: Test Installation
 
 ```bash
-# Test Python client
-python python/logan_client.py --help
+# Test Python clients (syntax-only)
+python -m py_compile python/logan_client.py python/dashboard_client.py python/query_validator.py
 
 # Test OCI connection
 oci iam region list
+
+# Test FastMCP module (syntax-only, requires Python ≥ 3.10)
+python - <<'PY'
+import sys, py_compile
+if sys.version_info >= (3, 10):
+    py_compile.compile('python/fastmcp_server.py', doraise=True)
+else:
+    print("FastMCP server skipped: requires Python 3.10+")
+PY
 
 # Restart Claude Desktop and test
 ```
@@ -318,6 +338,7 @@ ls python/venv/lib/python*/site-packages/oci  # OCI SDK installed
 source python/venv/bin/activate
 python python/logan_client.py --help
 python python/dashboard_client.py --help
+python -m py_compile python/fastmcp_server.py  # Syntax check (stdio-safe)
 ```
 
 **Test OCI connection**:

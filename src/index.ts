@@ -12,6 +12,9 @@
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
+import { createServer } from 'node:http';
+import { randomUUID } from 'node:crypto';
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
@@ -41,7 +44,7 @@ const DEFAULT_REGION = process.env.OCI_REGION || 'us-ashburn-1';
 const EXAMPLE_COMPARTMENT_ID = 'ocid1.compartment.oc1..aaaaaaaa[your-compartment-id]';
 
 // Server version - update with releases
-const SERVER_VERSION = '2.0.0';
+const SERVER_VERSION = '3.0.0';
 
 /**
  * OCI Logan MCP Server Class
@@ -161,8 +164,12 @@ class OCILoganMCPServer {
         return await this.validateQuery(typedArgs);
       case 'oci_logan_get_documentation':
         return await this.getDocumentation(typedArgs);
+      case 'oci_logan_usage_guide':
+        return await this.usageGuide(typedArgs);
       case 'oci_logan_check_connection':
         return await this.checkOCIConnection(typedArgs);
+      case 'oci_logan_health':
+        return await this.healthCheck(typedArgs);
 
       // Dashboard Management Tools
       case 'oci_logan_list_dashboards':
@@ -224,6 +231,60 @@ class OCILoganMCPServer {
         throw Errors.notFound('Tool', name);
     }
   }
+
+  // ============================================
+  // Health / Status
+  // ============================================
+
+  private async healthCheck(args: Record<string, unknown>): Promise<ToolResult> {
+    const { detail = false } = args as { detail?: boolean };
+    const transportEnv = (process.env.MCP_TRANSPORT || 'stdio').toLowerCase();
+    const info: Record<string, unknown> = {
+      status: 'ok',
+      server: 'oci_logan_mcp',
+      version: SERVER_VERSION,
+      transport: transportEnv,
+      region: DEFAULT_REGION,
+      defaultCompartment: DEFAULT_COMPARTMENT_ID || "unset"
+    };
+    if (detail) {
+      info.timestamp = new Date().toISOString();
+      info.nodeVersion = process.version;
+    }
+    return this.formatResponse('Health', info, 'json');
+  }
+
+  private async usageGuide(args: Record<string, unknown>): Promise<ToolResult> {
+    const { format = 'markdown' } = args as { format?: string };
+    const guide = {
+      summary: 'OCI Logan MCP usage guide',
+      transports: {
+        preferred: 'http',
+        fallback: 'stdio',
+        env: {
+          MCP_TRANSPORT: 'http|stdio',
+          MCP_HTTP_HOST: 'default 0.0.0.0',
+          MCP_HTTP_PORT: 'default 8000'
+        }
+      },
+      inputs: {
+        profile: 'use LOGAN_COMPARTMENT_ID / OCI_COMPARTMENT_ID and LOGAN_REGION / OCI_REGION',
+        defaults: 'agent should pass compartment/region when multi-tenant'
+      },
+      bestPractices: [
+        'Use cache-first where available; prefer concise queries',
+        'Limit time ranges to reduce cost; default 24h unless specified',
+        'Return markdown for chat UIs, json for programmatic use'
+      ],
+      references: [
+        'https://mcpcat.io/blog/mcp-server-best-practices/',
+        'https://modelcontextprotocol.info/docs/best-practices/',
+        'https://github.com/microsoft/mcp-for-beginners/blob/main/08-BestPractices/README.md'
+      ]
+    };
+    return this.formatResponse('Usage Guide', guide, format);
+  }
+
 
   // ============================================
   // Helper Methods
@@ -1733,6 +1794,23 @@ class OCILoganMCPServer {
   // ============================================
 
   async run() {
+    const transportEnv = (process.env.MCP_TRANSPORT || 'stdio').toLowerCase();
+    if (transportEnv === 'http') {
+      const port = Number(process.env.MCP_HTTP_PORT || 8000);
+      const host = process.env.MCP_HTTP_HOST || '0.0.0.0';
+      const transport = new StreamableHTTPServerTransport({
+        sessionIdGenerator: () => randomUUID(),
+        enableJsonResponse: false,
+      });
+      transport.onerror = (err) => logger.error('HTTP transport error', { error: err?.message });
+      await this.server.connect(transport);
+      await transport.start();
+      const httpServer = createServer((req, res) => transport.handleRequest(req as any, res));
+      await new Promise<void>((resolve) => httpServer.listen(port, host, resolve));
+      logger.info(`OCI Logan MCP Server v${SERVER_VERSION} running on http://${host}:${port}`);
+      return;
+    }
+
     const transport = new StdioServerTransport();
     await this.server.connect(transport);
     logger.info(`OCI Logan MCP Server v${SERVER_VERSION} running on stdio`);

@@ -50,7 +50,7 @@ class LoganClient:
             # If config file fails, try to create a minimal config from env vars
             if os.getenv('OCI_TENANCY') and os.getenv('OCI_USER') and os.getenv('OCI_FINGERPRINT') and \
                os.getenv('OCI_KEY_FILE') and os.getenv('LOGAN_REGION'):
-                print("Warning: OCI config file not found, attempting to use environment variables for config.")
+                sys.stderr.write("Warning: OCI config file not found, attempting to use environment variables for config.\n")
                 return {
                     "tenancy": os.getenv('OCI_TENANCY'),
                     "user": os.getenv('OCI_USER'),

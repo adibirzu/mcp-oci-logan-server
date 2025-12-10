@@ -152,3 +152,5 @@ wallet_*/
 *.sso
 auth_tokens
 compartment_ids.txt
+# Snyk Security Extension - AI Rules (auto-generated)
+.github/instructions/snyk_rules.instructions.md

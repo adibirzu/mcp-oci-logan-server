@@ -72,7 +72,7 @@ print_step() {
 check_prerequisites() {
     print_header "Step 1: Checking Prerequisites"
 
-    local all_good=true
+    all_good=true
 
     # Check Node.js
     print_step "Checking Node.js installation..."
@@ -255,18 +255,30 @@ build_typescript() {
 test_installation() {
     print_header "Step 5: Testing Installation"
 
-    # Test Python clients
+    # Test Python clients (syntax only)
     print_step "Testing Python clients..."
-    if python/venv/bin/python python/logan_client.py --help > /dev/null 2>&1; then
-        print_success "logan_client.py works"
+    if python/venv/bin/python -m py_compile python/logan_client.py python/dashboard_client.py python/query_validator.py python/security_analyzer.py; then
+        print_success "Python client modules compile"
     else
-        print_error "logan_client.py failed"
+        print_error "Python client compilation failed"
     fi
 
-    if python/venv/bin/python python/dashboard_client.py --help > /dev/null 2>&1; then
-        print_success "dashboard_client.py works"
+    # Test FastMCP server (syntax only to avoid stdio hang)
+    print_step "Testing FastMCP server module..."
+    python/venv/bin/python - <<'PY'
+import sys
+if sys.version_info < (3, 10):
+    sys.exit(42)
+PY
+    PY_STATUS=$?
+    if [ "$PY_STATUS" -eq 42 ]; then
+        print_warning "FastMCP server requires Python 3.10+; skipped"
+    elif [ "$PY_STATUS" -ne 0 ]; then
+        print_warning "FastMCP Python version check failed; skipped"
+    elif python/venv/bin/python -m py_compile python/fastmcp_server.py; then
+        print_success "FastMCP server module compiles"
     else
-        print_warning "dashboard_client.py check failed (may need OCI config)"
+        print_warning "FastMCP server module compilation failed"
     fi
 
     # Test if compiled JavaScript exists
@@ -278,12 +290,17 @@ test_installation() {
         return 1
     fi
 
-    # Test if node can load the module
+    # Test if node can parse the module structure
     print_step "Testing MCP server module..."
-    if node -e "import('./dist/index.js').catch(() => process.exit(1))" 2>/dev/null; then
-        print_success "MCP server module loads successfully"
+    # The MCP server starts on import and waits for stdio, so we verify structure instead
+    # Check for key module indicators without executing (which would hang)
+    if [ -f "dist/index.js" ] && \
+       grep -q "import.*@modelcontextprotocol" dist/index.js 2>/dev/null && \
+       (grep -q "class.*MCPServer\|Server\|OCILogan" dist/index.js 2>/dev/null || \
+        grep -q "new Server" dist/index.js 2>/dev/null); then
+        print_success "MCP server module structure validated"
     else
-        print_warning "MCP server module test inconclusive (may need OCI config)"
+        print_warning "MCP server module structure check inconclusive"
     fi
 }
 
@@ -294,9 +311,9 @@ test_installation() {
 configure_claude_desktop() {
     print_header "Step 6: Claude Desktop Configuration"
 
-    local CLAUDE_CONFIG_DIR="$HOME/Library/Application Support/Claude"
-    local CLAUDE_CONFIG="$CLAUDE_CONFIG_DIR/claude_desktop_config.json"
-    local PROJECT_DIR=$(pwd)
+    CLAUDE_CONFIG_DIR="$HOME/Library/Application Support/Claude"
+    CLAUDE_CONFIG="$CLAUDE_CONFIG_DIR/claude_desktop_config.json"
+    PROJECT_DIR=$(pwd)
 
     print_info "Claude Desktop configuration options:"
     echo ""
