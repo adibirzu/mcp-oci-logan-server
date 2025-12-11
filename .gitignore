@@ -77,7 +77,19 @@ claude_desktop_config.json
 test-results/
 screenshots/
 
+# Virtual environments (root level)
+.venv/
+.venv311/
+.venv*/
+venv/
+ENV/
+env/
+
 # Python
+python/
+python3/
+.python-version
+python/venv311
 python/venv/
 python/__pycache__/
 python/*.pyc
