@@ -80,6 +80,7 @@ screenshots/
 # Virtual environments (root level)
 .venv/
 .venv311/
+python/.venv
 .venv*/
 venv/
 ENV/

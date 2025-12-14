@@ -240,11 +240,11 @@ export declare const GetDashboardTilesSchema: z.ZodObject<{
 }, "strict", z.ZodTypeAny, {
     format?: "markdown" | "json";
     dashboardId?: string;
-    tileType?: "query" | "all" | "text" | "visualization" | "metric";
+    tileType?: "text" | "query" | "all" | "visualization" | "metric";
 }, {
     format?: "markdown" | "json";
     dashboardId?: string;
-    tileType?: "query" | "all" | "text" | "visualization" | "metric";
+    tileType?: "text" | "query" | "all" | "visualization" | "metric";
 }>;
 /**
  * create_dashboard input schema
@@ -321,9 +321,9 @@ export declare const CreateDashboardSchema: z.ZodObject<{
         }[];
     }>>;
 }, "strict", z.ZodTypeAny, {
+    description?: string;
     compartmentId?: string;
     displayName?: string;
-    description?: string;
     dashboardConfig?: {
         widgets?: {
             query?: string;
@@ -338,9 +338,9 @@ export declare const CreateDashboardSchema: z.ZodObject<{
         }[];
     };
 }, {
+    description?: string;
     compartmentId?: string;
     displayName?: string;
-    description?: string;
     dashboardConfig?: {
         widgets?: {
             query?: string;
@@ -405,9 +405,9 @@ export declare const UpdateDashboardSchema: z.ZodObject<{
     }>, "many">>;
     removeWidgetIds: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
 }, "strict", z.ZodTypeAny, {
+    description?: string;
     displayName?: string;
     dashboardId?: string;
-    description?: string;
     addWidgets?: {
         query?: string;
         displayName?: string;
@@ -421,9 +421,9 @@ export declare const UpdateDashboardSchema: z.ZodObject<{
     }[];
     removeWidgetIds?: string[];
 }, {
+    description?: string;
     displayName?: string;
     dashboardId?: string;
-    description?: string;
     addWidgets?: {
         query?: string;
         displayName?: string;
@@ -447,16 +447,16 @@ export declare const CreateSavedSearchSchema: z.ZodObject<{
     compartmentId: z.ZodOptional<z.ZodString>;
     widgetType: z.ZodDefault<z.ZodEnum<["SEARCH", "CHART", "TABLE", "METRIC"]>>;
 }, "strict", z.ZodTypeAny, {
+    description?: string;
     query?: string;
     compartmentId?: string;
     displayName?: string;
-    description?: string;
     widgetType?: "SEARCH" | "TABLE" | "METRIC" | "CHART";
 }, {
+    description?: string;
     query?: string;
     compartmentId?: string;
     displayName?: string;
-    description?: string;
     widgetType?: "SEARCH" | "TABLE" | "METRIC" | "CHART";
 }>;
 /**
@@ -645,7 +645,7 @@ export declare const CorrelationAnalysisSchema: z.ZodObject<{
     compartmentId?: string;
     timeRange?: "24h" | "1h" | "6h" | "12h" | "1d" | "7d" | "30d" | "1w" | "1m" | "90d";
     format?: "markdown" | "json";
-    correlationType?: "temporal" | "entity" | "transaction" | "session" | "custom";
+    correlationType?: "session" | "temporal" | "entity" | "transaction" | "custom";
     primaryField?: string;
     secondaryFields?: string[];
     timeWindow?: string;
@@ -654,7 +654,7 @@ export declare const CorrelationAnalysisSchema: z.ZodObject<{
     compartmentId?: string;
     timeRange?: "24h" | "1h" | "6h" | "12h" | "1d" | "7d" | "30d" | "1w" | "1m" | "90d";
     format?: "markdown" | "json";
-    correlationType?: "temporal" | "entity" | "transaction" | "session" | "custom";
+    correlationType?: "session" | "temporal" | "entity" | "transaction" | "custom";
     primaryField?: string;
     secondaryFields?: string[];
     timeWindow?: string;

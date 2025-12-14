@@ -8,13 +8,17 @@ This software was created to showcase Oracle Cloud Infrastructure (OCI) Logging 
 
 ---
 
-## 🚨 v1.3.0 Update - Critical Fix Applied
+## 🚀 v2.0.0 Update - HTTP Transport with OAuth Authentication
 
-**IMPORTANT**: If you're upgrading from an earlier version, note that v1.3.0 includes a **critical fix** for the `list_active_log_sources` tool that was returning incomplete results. The tool now returns ALL active log sources matching the OCI Console exactly.
+**NEW IN v2.0.0**: Full HTTP transport support with OAuth 2.0 authentication for production deployments!
 
-**What changed**: Resource discovery questions like "What log sources are available?" now return complete, accurate results (12+ sources instead of just 1-2).
+**Key Features**:
+- **HTTP Transport**: Run as a web service with SSE (Server-Sent Events) support
+- **OAuth 2.0**: Token introspection, scope validation, audience verification
+- **IDCS Ready**: Configured for OCI Identity Cloud Service integration (port 8001)
+- **Dual Transport**: Supports both stdio (Claude Desktop) and HTTP (web services)
 
-See [Recent Updates](#recent-updates) for full details.
+See [HTTP Transport & OAuth](#http-transport--oauth-authentication) for setup details.
 
 ---
 
@@ -215,6 +219,128 @@ This script:
 - Updates dependencies
 - Rebuilds TypeScript
 - Shows next steps
+
+## HTTP Transport & OAuth Authentication
+
+### Overview
+
+The OCI Logan MCP Server supports two transport modes:
+
+| Transport | Use Case | Port | Authentication |
+|-----------|----------|------|----------------|
+| **stdio** | Claude Desktop, local development | N/A | None (process-level) |
+| **HTTP** | Web services, API access, production | 8001 (default) | OAuth 2.0 |
+
+### Running with HTTP Transport
+
+#### Python FastMCP Server (Recommended for Production)
+
+```bash
+# Without OAuth (development)
+cd python
+source venv/bin/activate
+MCP_TRANSPORT=http MCP_HTTP_PORT=8001 python main.py
+
+# With OAuth (production)
+MCP_TRANSPORT=http \
+MCP_HTTP_PORT=8001 \
+MCP_OAUTH_ENABLED=true \
+MCP_OAUTH_ISSUER_URL=https://idcs-xxxxx.identity.oraclecloud.com \
+MCP_OAUTH_INTROSPECTION_URL=https://idcs-xxxxx.identity.oraclecloud.com/oauth2/v1/introspect \
+MCP_OAUTH_CLIENT_ID=your-client-id \
+MCP_OAUTH_CLIENT_SECRET=your-client-secret \
+MCP_OAUTH_REQUIRED_SCOPES=mcp:tools \
+python main.py
+```
+
+#### TypeScript Server
+
+```bash
+# Build first
+npm run build
+
+# Without OAuth
+MCP_TRANSPORT=http MCP_HTTP_PORT=8000 node dist/index.js
+
+# With OAuth
+MCP_TRANSPORT=http \
+MCP_HTTP_PORT=8000 \
+MCP_OAUTH_ENABLED=true \
+MCP_OAUTH_ISSUER_URL=https://idcs-xxxxx.identity.oraclecloud.com \
+MCP_OAUTH_INTROSPECTION_URL=https://idcs-xxxxx.identity.oraclecloud.com/oauth2/v1/introspect \
+MCP_OAUTH_CLIENT_ID=your-client-id \
+MCP_OAUTH_CLIENT_SECRET=your-client-secret \
+node dist/index.js
+```
+
+### HTTP Endpoints
+
+| Endpoint | Method | Auth Required | Description |
+|----------|--------|---------------|-------------|
+| `/health` | GET | No | Health check |
+| `/.well-known/oauth-protected-resource` | GET | No | OAuth resource metadata |
+| `/sse` | GET | Yes* | SSE connection for MCP |
+| `/messages/` | POST | Yes* | MCP message endpoint |
+
+*Authentication required only when `MCP_OAUTH_ENABLED=true`
+
+### OAuth Configuration
+
+For OCI IDCS (Identity Cloud Service):
+
+1. **Create an Application** in IDCS:
+   - Application Type: Confidential
+   - Grant Types: Client Credentials
+   - Callback URL: `http://localhost:8001` (or your server URL)
+
+2. **Configure Scopes**:
+   - Add custom scope: `mcp:tools`
+
+3. **Set Environment Variables**:
+```bash
+export MCP_OAUTH_ENABLED=true
+export MCP_OAUTH_ISSUER_URL=https://idcs-xxxxx.identity.oraclecloud.com
+export MCP_OAUTH_INTROSPECTION_URL=https://idcs-xxxxx.identity.oraclecloud.com/oauth2/v1/introspect
+export MCP_OAUTH_CLIENT_ID=your-idcs-client-id
+export MCP_OAUTH_CLIENT_SECRET=your-idcs-client-secret
+export MCP_OAUTH_REQUIRED_SCOPES=mcp:tools
+export MCP_OAUTH_AUDIENCE=https://your-mcp-server.example.com  # optional
+```
+
+### Testing HTTP Transport
+
+```bash
+# Health check (no auth required)
+curl http://localhost:8001/health
+
+# OAuth metadata
+curl http://localhost:8001/.well-known/oauth-protected-resource
+
+# With OAuth token
+curl -H "Authorization: Bearer YOUR_TOKEN" http://localhost:8001/sse
+```
+
+### Environment Variables Reference
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `MCP_TRANSPORT` | Transport type: `stdio` or `http` | `stdio` |
+| `MCP_HTTP_HOST` | HTTP server bind address | `0.0.0.0` |
+| `MCP_HTTP_PORT` | HTTP server port (8001 for IDCS) | `8001` |
+| `MCP_HTTP_CORS` | Enable CORS | `true` |
+| `MCP_HTTP_CORS_ORIGINS` | Allowed origins (comma-separated) | `*` |
+| `MCP_OAUTH_ENABLED` | Enable OAuth authentication | `false` |
+| `MCP_OAUTH_ISSUER_URL` | OAuth issuer URL | - |
+| `MCP_OAUTH_INTROSPECTION_URL` | Token introspection endpoint | - |
+| `MCP_OAUTH_CLIENT_ID` | OAuth client ID | - |
+| `MCP_OAUTH_CLIENT_SECRET` | OAuth client secret | - |
+| `MCP_OAUTH_REQUIRED_SCOPES` | Required scopes (comma-separated) | `mcp:tools` |
+| `MCP_OAUTH_AUDIENCE` | Expected token audience | - |
+| `MCP_OAUTH_TOKEN_CACHE_TTL` | Token cache TTL in seconds | `300` |
+| `MCP_SESSION_TIMEOUT` | Session timeout in ms | `3600000` |
+| `MCP_MAX_SESSIONS` | Maximum concurrent sessions | `100` |
+
+---
 
 ## Usage Examples
 
@@ -593,55 +719,96 @@ The repository is configured to exclude unnecessary files from version control:
 ### Actual Architecture & Data Flow
 
 ```
-Claude/AI Assistant
-        ↓
-MCP Protocol (stdio)
-        ↓
-TypeScript Server (src/index.ts) - 33 MCP Tools
-        ↓
-LogAnalyticsClient.ts - OCI Integration Layer
-        ↓
-Python Process Spawn (child_process)
-        ↓
-Python Backend (logan_client.py, dashboard_client.py)
-        ↓
-OCI SDK (Python) - Direct API Calls
-        ↓
-OCI Log Analytics API (Real Data - NO Mock Policy)
+                                 ┌─────────────────────────────────────────┐
+                                 │         Client Applications            │
+                                 │  Claude Desktop / Web Apps / APIs      │
+                                 └─────────────────┬───────────────────────┘
+                                                   │
+                    ┌──────────────────────────────┴──────────────────────────────┐
+                    │                                                              │
+            ┌───────▼───────┐                                        ┌─────────────▼─────────────┐
+            │ stdio Transport│                                        │   HTTP Transport (SSE)    │
+            │ (Claude Desktop)│                                        │   Port 8001 (Python)      │
+            │                │                                        │   Port 8000 (TypeScript)  │
+            └───────┬───────┘                                        └─────────────┬─────────────┘
+                    │                                                              │
+                    │                                                  ┌───────────▼───────────┐
+                    │                                                  │  OAuth 2.0 Middleware │
+                    │                                                  │  Token Introspection  │
+                    │                                                  │  (IDCS / Custom IDP)  │
+                    │                                                  └───────────┬───────────┘
+                    │                                                              │
+                    └───────────────────────┬──────────────────────────────────────┘
+                                            │
+                    ┌───────────────────────▼───────────────────────┐
+                    │            MCP Server Layer                   │
+                    │  ┌─────────────────────────────────────────┐  │
+                    │  │ Python FastMCP (main.py)                │  │
+                    │  │ 25+ Tools: Log Analysis, Security,      │  │
+                    │  │ Alert Correlation, Compliance           │  │
+                    │  └─────────────────────────────────────────┘  │
+                    │                    OR                         │
+                    │  ┌─────────────────────────────────────────┐  │
+                    │  │ TypeScript Server (src/index.ts)        │  │
+                    │  │ 33 MCP Tools + Python Backend           │  │
+                    │  └─────────────────────────────────────────┘  │
+                    └───────────────────────┬───────────────────────┘
+                                            │
+                    ┌───────────────────────▼───────────────────────┐
+                    │           Skills & Business Logic             │
+                    │  ┌────────────┐ ┌───────────┐ ┌────────────┐  │
+                    │  │LogAnalysis │ │ Security  │ │   Alert    │  │
+                    │  │   Skill    │ │   Audit   │ │Correlation │  │
+                    │  └────────────┘ └───────────┘ └────────────┘  │
+                    └───────────────────────┬───────────────────────┘
+                                            │
+                    ┌───────────────────────▼───────────────────────┐
+                    │        OCI SDK (Python) - Direct API          │
+                    └───────────────────────┬───────────────────────┘
+                                            │
+                    ┌───────────────────────▼───────────────────────┐
+                    │     OCI Log Analytics API (Real Data)         │
+                    │           NO Mock Data Policy                 │
+                    └───────────────────────────────────────────────┘
 ```
 
 ### Project Structure (Actual Implementation)
 
 ```
 src/
-├── index.ts              # Main MCP server with 19 implemented tools
+├── index.ts              # Main MCP server entry point (stdio/http transport selection)
+├── auth/
+│   └── oauth.ts          # OAuth 2.0 authentication (NEW in v2.0.0)
+├── transport/
+│   └── http.ts           # HTTP transport with session management (NEW in v2.0.0)
 ├── oci/
 │   └── LogAnalyticsClient.ts  # OCI integration with Python backend spawning
 └── utils/
     ├── QueryValidator.ts      # Query validation and syntax fixing
     ├── QueryTransformer.ts    # Query transformation and MITRE mapping
-    └── DocumentationLookup.ts # Built-in help system
+    ├── DocumentationLookup.ts # Built-in help system
+    └── logger.ts              # Logging utility
 
 python/
 ├── venv/                 # Python virtual environment (created by setup-python.sh)
+├── main.py               # FastMCP server with HTTP/OAuth support (v2.0.0)
+├── fastmcp_server.py     # Minimal FastMCP server (stdio only)
 ├── logan_client.py       # Primary OCI Log Analytics client (fully functional)
 ├── dashboard_client.py   # Dashboard operations (partial implementation)
 ├── security_analyzer.py  # Security event analysis (fully functional)
 ├── query_mapper.py       # Query mapping utilities
 ├── query_validator.py    # Python-side query validation
-└── requirements.txt      # Python dependencies (oci-sdk, etc.)
-
-test files: (Excluded from git)
-├── test-server.js        # MCP server functionality tests
-├── test-oci-direct.js    # Direct OCI connection tests
-├── test-time-correlation.js # Time correlation verification
-├── test-dashboard-export.js # Dashboard export tests
-└── test-time-update.js   # Time synchronization tests
+├── skills/               # Skill modules for main.py
+│   ├── log_analysis.py   # Log analysis skill
+│   ├── security_audit.py # Security audit skill
+│   └── alert_correlation.py # Alert correlation skill
+└── requirements.txt      # Python dependencies (oci-sdk, uvicorn, starlette)
 
 config files:
+├── .env.template         # Environment configuration template (updated for OAuth)
 ├── claude_desktop_config.json.template # Claude Desktop MCP configuration
-├── setup-python.sh      # Python environment setup script
-└── .gitignore           # Excludes venv/, test files, credentials
+├── setup-python.sh       # Python environment setup script
+└── .gitignore            # Excludes venv/, test files, credentials
 ```
 
 ## Contributing
@@ -680,51 +847,70 @@ See [`docs/README.md`](docs/README.md) for a complete documentation index.
 
 ## Recent Updates
 
-### v1.3.0 - Critical Fix & Complete Documentation (October 2025) 🚨
+### v2.0.0 - HTTP Transport with OAuth Authentication (December 2025)
+
+**MAJOR RELEASE**: Full HTTP transport support with OAuth 2.0 authentication for production deployments!
+
+**New Features**:
+- **HTTP Transport**: Run as a web service with SSE (Server-Sent Events) support
+  - Python FastMCP server on port 8001 (recommended for production)
+  - TypeScript server on port 8000 (alternative)
+- **OAuth 2.0 Authentication**:
+  - Token introspection with configurable endpoint
+  - Scope validation (default: `mcp:tools`)
+  - Audience verification
+  - Token caching with configurable TTL
+- **IDCS Ready**: Configured for OCI Identity Cloud Service integration
+- **Dual Transport**: Supports both stdio (Claude Desktop) and HTTP (web services)
+- **New Endpoints**:
+  - `/health` - Health check (no auth required)
+  - `/.well-known/oauth-protected-resource` - OAuth metadata
+  - `/sse` - SSE connection for MCP protocol
+  - `/messages/` - MCP message endpoint
+
+**New Files**:
+- `src/auth/oauth.ts` - OAuth 2.0 authentication module (TypeScript)
+- `src/transport/http.ts` - HTTP transport with session management (TypeScript)
+- `python/main.py` - Updated with HTTP transport & OAuth support
+
+**Environment Variables Added**:
+- `MCP_TRANSPORT` - Transport type: `stdio` or `http`
+- `MCP_HTTP_HOST`, `MCP_HTTP_PORT` - HTTP server configuration
+- `MCP_OAUTH_ENABLED`, `MCP_OAUTH_*` - OAuth configuration
+- See [HTTP Transport & OAuth](#http-transport--oauth-authentication) for full reference
+
+### v1.3.0 - Critical Fix & Complete Documentation (October 2025)
 
 **CRITICAL FIX**: `list_active_log_sources` now returns complete results!
 
-- 🚨 **CRITICAL BUG FIX**: Fixed `list_active_log_sources` returning incomplete results (was showing 1-2 sources instead of all 12+)
-  - **Root Cause**: Using wrong query execution method that embedded time filter in query string
-  - **Solution**: Now uses console-like query execution with separate timeFilter parameter
-  - **Impact**: Resource discovery questions now return accurate, complete results matching OCI Console
-  - **File Changed**: `python/logan_client.py:571-578`
-- 🔧 **Fixed Hardcoded Path**: Removed hardcoded path in QueryTransformer.ts, added environment variable support
-- 📝 **Updated Configuration Template**: Added `OCI_REGION` and `LOGAN_DEBUG` to Claude Desktop config
-- 📚 **Created docs/USER_GUIDE.md**: Comprehensive guide on asking effective questions
-- 📄 **Created docs/IMPROVEMENTS.md**: Detailed changelog with user guidance
-- 📄 **Created docs/CRITICAL_FIX_README.md**: Explains the critical fix in detail
-- 🔍 **Tool Inventory Corrected**: 33 total tools with accurate implementation status (not 19)
-- ✅ **Build Verified**: All changes compiled and tested successfully
-
-**Before this fix**: Asking "What log sources are available?" returned only 1-2 sources (incomplete)
-**After this fix**: Returns all 12+ active sources with accurate log counts (complete, matches console)
+- **CRITICAL BUG FIX**: Fixed `list_active_log_sources` returning incomplete results
+- **Fixed Hardcoded Path**: Removed hardcoded path in QueryTransformer.ts
+- **Tool Inventory Corrected**: 33 total tools with accurate implementation status
 
 ### v1.2.0 - Architecture Analysis & Documentation Update (August 2025)
-- ✅ **Code Analysis Complete**: Comprehensive codebase analysis revealing actual vs documented features
-- 📊 **Dashboard Status Clarified**: Updated documentation to reflect partial/mock implementations
-- 🔍 **Tool Inventory Corrected**: 33 total tools with accurate implementation status
-- 🐛 **Technical Debt Identified**: Hardcoded paths, mock implementations documented
-- 📝 **Architecture Documented**: Real data flow and Python backend integration detailed
-- 🔄 **License Reverted**: Changed from Apache License back to MIT
+- Code analysis revealing actual vs documented features
+- Dashboard status clarified with partial/mock implementations
+- Architecture documented with real data flow details
 
-### Implementation Reality Check
-- **Query Execution**: ✅ Fully functional with real OCI API integration
-- **Security Analytics**: ✅ Complete implementation with advanced analytics
-- **Resource Discovery**: ✅ **FIXED** - Now returns complete results matching OCI Console
-- **Dashboard Management**: ⚠️ Partial/mock implementations only
-- **Python Backend**: ✅ Robust integration with OCI SDK
-- **Time Correlation**: ✅ Accurate UTC timezone handling
-- **Path Resolution**: ✅ **FIXED** - No more hardcoded paths
-- **NO Mock Data**: ✅ Strict policy enforced for query results
+### Implementation Status
+| Feature | Status |
+|---------|--------|
+| Query Execution | ✅ Fully functional with real OCI API |
+| HTTP Transport | ✅ **NEW in v2.0.0** |
+| OAuth Authentication | ✅ **NEW in v2.0.0** |
+| Security Analytics | ✅ Complete implementation |
+| Resource Discovery | ✅ Fixed in v1.3.0 |
+| Dashboard Management | ⚠️ Partial/mock implementations |
+| Python Backend | ✅ Robust integration with OCI SDK |
+| Time Correlation | ✅ Accurate UTC timezone handling |
 
 ### Next Development Priorities
-1. ✅ ~~Fix hardcoded Python script paths~~ **COMPLETED in v1.3.0**
-2. ✅ ~~Fix resource discovery incomplete results~~ **COMPLETED in v1.3.0**
+1. ✅ ~~HTTP Transport Support~~ **COMPLETED in v2.0.0**
+2. ✅ ~~OAuth Authentication~~ **COMPLETED in v2.0.0**
 3. Implement real OCI Dashboard/Management API integration
 4. Add comprehensive error handling
 5. Implement query template library
 6. Add configuration management system
 
-**Version**: 1.3.0
-**Last Updated**: October 2025
+**Version**: 2.0.0
+**Last Updated**: December 2025

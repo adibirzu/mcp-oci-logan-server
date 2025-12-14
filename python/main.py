@@ -7,8 +7,10 @@ Comprehensive MCP server for OCI Logging Analytics with:
 - Security audit and threat detection
 - Alert correlation and root cause analysis
 - Server manifest for capability discovery
+- All 3 transport options: stdio, SSE (legacy), HTTP (recommended)
+- OCI IAM OAuth 2.0 authentication support
 
-Implements a stdio-safe MCP server using the Python SDK's FastMCP helper.
+Implements a stdio-safe MCP server using the FastMCP framework.
 Best-practice highlights:
 - Tool names use snake_case without spaces or dots
 - No stdout logging (only stderr/file)
@@ -24,21 +26,95 @@ import logging
 import os
 import sys
 from dataclasses import asdict
+from datetime import datetime, timezone
 from typing import Annotated, Any, Dict, List, Optional
 
-from mcp.server.fastmcp import FastMCP
 from pydantic import Field
 
 # Stdio-safe logging (never stdout)
 logging.basicConfig(
-    level=logging.INFO,
+    level=getattr(logging, os.getenv("MCP_LOG_LEVEL", "INFO").upper(), logging.INFO),
     stream=sys.stderr,
     format="%(asctime)s [%(levelname)s] %(name)s - %(message)s",
 )
 logger = logging.getLogger("oci_logan_mcp")
 
-# FastMCP instance
-mcp = FastMCP("oci_logan_mcp")
+# FastMCP imports
+from fastmcp import FastMCP
+
+# =============================================================================
+# OAuth Configuration using OCIProvider (same pattern as OPSI)
+# =============================================================================
+
+def get_auth_provider(base_url: str) -> Any:
+    """
+    Configure OCI IAM OAuth provider using FastMCP's OCIProvider.
+
+    This follows the same pattern as other MCP servers (OPSI, finopsai-mcp).
+
+    Environment Variables Required:
+        FASTMCP_SERVER_AUTH_OCI_CONFIG_URL: OIDC configuration endpoint
+        FASTMCP_SERVER_AUTH_OCI_CLIENT_ID: OAuth application client ID
+        FASTMCP_SERVER_AUTH_OCI_CLIENT_SECRET: OAuth application secret
+        JWT_SIGNING_KEY: Key for signing internal JWTs
+        STORAGE_ENCRYPTION_KEY: (Optional) Fernet key for encrypting stored tokens
+
+    Returns:
+        OCIProvider instance if OAuth is enabled, None otherwise
+    """
+    oauth_enabled = os.getenv("FASTMCP_OAUTH_ENABLED", "false").lower() == "true"
+
+    if not oauth_enabled:
+        logger.info("OAuth authentication disabled")
+        return None
+
+    # Check if all required OAuth vars are set
+    required_vars = [
+        "FASTMCP_SERVER_AUTH_OCI_CONFIG_URL",
+        "FASTMCP_SERVER_AUTH_OCI_CLIENT_ID",
+        "FASTMCP_SERVER_AUTH_OCI_CLIENT_SECRET",
+        "JWT_SIGNING_KEY",
+    ]
+
+    missing = [var for var in required_vars if not os.environ.get(var)]
+    if missing:
+        logger.warning(f"OAuth enabled but missing required variables: {', '.join(missing)}")
+        logger.warning("Disabling OAuth authentication")
+        return None
+
+    try:
+        from auth.oci_oauth import create_oci_auth_provider
+        provider = create_oci_auth_provider(base_url=base_url)
+        logger.info("OAuth authentication enabled using OCI IAM OCIProvider")
+        return provider
+    except ImportError as e:
+        logger.warning(f"OAuth dependencies not available: {e}")
+        logger.warning("Install with: pip install 'fastmcp[auth]' cryptography key-value-aio")
+        return None
+    except Exception as e:
+        logger.error(f"Failed to configure OAuth: {e}")
+        return None
+
+
+# =============================================================================
+# FastMCP Server Instance
+# =============================================================================
+
+# Determine base URL for OAuth callbacks
+http_host = os.getenv("MCP_HTTP_HOST", "0.0.0.0")
+http_port = int(os.getenv("MCP_HTTP_PORT", "8001"))
+# Use localhost for callbacks since 0.0.0.0 is not a valid callback URL
+callback_host = "localhost" if http_host == "0.0.0.0" else http_host
+base_url = os.getenv("MCP_BASE_URL", f"http://{callback_host}:{http_port}")
+
+# Get auth provider based on configuration
+auth_provider = get_auth_provider(base_url)
+
+# Create FastMCP instance with authentication
+mcp = FastMCP(
+    name="oci_logan_mcp",
+    auth=auth_provider,
+)
 
 # Lazy-loaded skill instances
 _log_analysis_skill = None
@@ -81,13 +157,17 @@ def _get_alert_correlation_skill():
 async def server_manifest() -> str:
     """
     Server manifest resource for capability discovery.
-    
+
     Returns server metadata, available skills, and tool categorization.
     """
+    oauth_enabled = os.getenv("FASTMCP_OAUTH_ENABLED", "false").lower() == "true"
     manifest = {
         "name": "OCI Logan MCP Server",
-        "version": "2.0.0",
+        "version": "4.0.0",
         "description": "OCI Logging Analytics MCP Server with intelligent log analysis, security audit, and alert correlation",
+        "transport_options": ["stdio", "sse", "http"],
+        "oauth_enabled": oauth_enabled,
+        "oauth_provider": "OCI IAM (OCIProvider)" if oauth_enabled else None,
         "capabilities": {
             "skills": [
                 "log-analysis",
@@ -133,7 +213,11 @@ Skills provide high-level workflows:
         "environment_variables": [
             "LOGAN_COMPARTMENT_ID",
             "LOGAN_REGION",
-            "OCI_CONFIG_FILE"
+            "OCI_CONFIG_FILE",
+            "MCP_TRANSPORT",
+            "FASTMCP_OAUTH_ENABLED",
+            "FASTMCP_SERVER_AUTH_OCI_CONFIG_URL",
+            "FASTMCP_SERVER_AUTH_OCI_CLIENT_ID"
         ]
     }
     return json.dumps(manifest, indent=2)
@@ -149,19 +233,31 @@ async def health(
 ) -> Dict[str, Any]:
     """Health/status check for the OCI Logan MCP server."""
     transport = os.getenv("MCP_TRANSPORT", "stdio").lower()
+    oauth_enabled = os.getenv("FASTMCP_OAUTH_ENABLED", "false").lower() == "true"
+
     info: Dict[str, Any] = {
         "status": "ok",
         "server": "oci_logan_mcp",
-        "version": "2.0.0",
+        "version": "4.0.0",
         "transport": transport,
+        "oauth_enabled": oauth_enabled,
+        "oauth_provider": "OCI IAM (OCIProvider)" if oauth_enabled else "disabled",
         "region": os.getenv("LOGAN_REGION") or os.getenv("OCI_REGION") or "unset",
         "default_compartment": os.getenv("LOGAN_COMPARTMENT_ID") or os.getenv("OCI_COMPARTMENT_ID") or os.getenv("OCI_TENANCY") or "unset",
     }
     if detail:
-        import datetime
-        info["timestamp"] = datetime.datetime.utcnow().isoformat() + "Z"
+        info["timestamp"] = datetime.now(timezone.utc).isoformat()
         info["python_version"] = sys.version
         info["skills"] = ["LogAnalysisSkill", "SecurityAuditSkill", "AlertCorrelationSkill"]
+        info["transports_available"] = ["stdio", "sse", "http"]
+
+        # OAuth status
+        if oauth_enabled:
+            try:
+                from auth.oci_oauth import get_oauth_config_status
+                info["oauth_status"] = get_oauth_config_status()
+            except ImportError:
+                info["oauth_status"] = {"error": "OAuth module not available"}
     return info
 
 
@@ -535,8 +631,13 @@ async def get_alert_statistics(
 @mcp.tool()
 async def list_available_skills() -> Dict[str, Any]:
     """List all available skills and their capabilities."""
+    oauth_enabled = os.getenv("FASTMCP_OAUTH_ENABLED", "false").lower() == "true"
     return {
         "success": True,
+        "server_version": "4.0.0",
+        "transport_options": ["stdio", "sse", "http"],
+        "oauth_enabled": oauth_enabled,
+        "oauth_provider": "OCI IAM (OCIProvider)" if oauth_enabled else "disabled",
         "skills": [
             {
                 "name": "LogAnalysisSkill",
@@ -566,9 +667,9 @@ async def get_skill_for_query(
 ) -> Dict[str, Any]:
     """Get recommended skill and tools for a natural language query."""
     query_lower = query.lower()
-    
+
     recommendations = []
-    
+
     # Security-related queries
     if any(term in query_lower for term in ["security", "threat", "attack", "login", "auth", "compliance", "audit"]):
         recommendations.append({
@@ -577,7 +678,7 @@ async def get_skill_for_query(
             "suggested_tools": ["run_security_check", "get_threat_summary", "detect_failed_logins"],
             "reason": "Query appears to be security-related"
         })
-    
+
     # Alert/incident-related queries
     if any(term in query_lower for term in ["alert", "incident", "root cause", "correlate", "rca", "timeline"]):
         recommendations.append({
@@ -586,7 +687,7 @@ async def get_skill_for_query(
             "suggested_tools": ["correlate_alerts", "analyze_root_cause", "build_incident_timeline"],
             "reason": "Query appears to be about incident investigation"
         })
-    
+
     # Log search/analysis queries
     if any(term in query_lower for term in ["log", "search", "error", "find", "source", "aggregate"]):
         recommendations.append({
@@ -595,7 +696,7 @@ async def get_skill_for_query(
             "suggested_tools": ["search_logs", "aggregate_logs", "get_top_errors"],
             "reason": "Query appears to be about log search/analysis"
         })
-    
+
     if not recommendations:
         recommendations.append({
             "skill": "LogAnalysisSkill",
@@ -603,7 +704,7 @@ async def get_skill_for_query(
             "suggested_tools": ["list_log_sources", "search_logs"],
             "reason": "Default recommendation - start with log exploration"
         })
-    
+
     return {
         "success": True,
         "query": query,
@@ -616,14 +717,50 @@ async def get_skill_for_query(
 # =============================================================================
 
 def main() -> None:
-    """Run the FastMCP server (stdio default)."""
+    """
+    Run the FastMCP server with configurable transport.
+
+    Environment variables:
+    - MCP_TRANSPORT: Transport mode - "stdio" (default), "sse" (legacy), or "http" (recommended for remote)
+    - MCP_HTTP_HOST: HTTP bind host (default: 0.0.0.0)
+    - MCP_HTTP_PORT: HTTP port (default: 8001)
+    - MCP_HTTP_PATH: HTTP endpoint path (default: /mcp)
+    - FASTMCP_OAUTH_ENABLED: Enable OAuth authentication (default: false)
+
+    Transport details:
+    - stdio: Standard input/output for local development and Claude Desktop
+    - sse: Server-Sent Events (legacy, use HTTP instead for new projects)
+    - http: Streamable HTTP transport (recommended for production/remote access)
+    """
     transport = os.getenv("MCP_TRANSPORT", "stdio").lower()
-    if transport != "stdio":
-        logger.warning("Transport %s not supported; falling back to stdio", transport)
-        transport = "stdio"
-    logger.info("Starting OCI Logan MCP Server v2.0.0 (%s transport)", transport)
-    logger.info("Skills: LogAnalysis, SecurityAudit, AlertCorrelation")
-    mcp.run(transport=transport)
+    http_host = os.getenv("MCP_HTTP_HOST", "0.0.0.0")
+    http_port = int(os.getenv("MCP_HTTP_PORT", "8001"))
+    http_path = os.getenv("MCP_HTTP_PATH", "/mcp")
+    oauth_enabled = os.getenv("FASTMCP_OAUTH_ENABLED", "false").lower() == "true"
+
+    logger.info(
+        f"Starting OCI Logan MCP Server v4.0.0 | transport={transport} | "
+        f"oauth={'enabled (OCI IAM)' if oauth_enabled else 'disabled'} | "
+        f"skills=[LogAnalysis, SecurityAudit, AlertCorrelation]"
+    )
+
+    if transport == "http":
+        # Streamable HTTP transport (recommended for production)
+        logger.info(f"HTTP mode: http://{http_host}:{http_port}{http_path}")
+        if oauth_enabled:
+            logger.info(f"OAuth callback: {base_url}/oauth/callback")
+        mcp.run(transport="http", host=http_host, port=http_port, path=http_path)
+
+    elif transport == "sse":
+        # Legacy SSE transport (still supported for backward compatibility)
+        logger.info(f"SSE mode (legacy): http://{http_host}:{http_port}")
+        logger.warning("SSE transport is deprecated. Consider using HTTP transport instead.")
+        mcp.run(transport="sse", host=http_host, port=http_port)
+
+    else:
+        # Default: stdio transport (for Claude Desktop and local development)
+        logger.info("stdio mode: reading from stdin, writing to stdout")
+        mcp.run(transport="stdio")
 
 
 if __name__ == "__main__":

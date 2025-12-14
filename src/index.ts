@@ -12,9 +12,7 @@
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
-import { createServer } from 'node:http';
-import { randomUUID } from 'node:crypto';
+import { startHTTPServer } from './transport/http.js';
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
@@ -1793,24 +1791,23 @@ class OCILoganMCPServer {
   // Server Lifecycle
   // ============================================
 
+  /**
+   * Get the internal MCP server instance (for transport setup)
+   */
+  getServer(): Server {
+    return this.server;
+  }
+
   async run() {
     const transportEnv = (process.env.MCP_TRANSPORT || 'stdio').toLowerCase();
+
     if (transportEnv === 'http') {
-      const port = Number(process.env.MCP_HTTP_PORT || 8000);
-      const host = process.env.MCP_HTTP_HOST || '0.0.0.0';
-      const transport = new StreamableHTTPServerTransport({
-        sessionIdGenerator: () => randomUUID(),
-        enableJsonResponse: false,
-      });
-      transport.onerror = (err) => logger.error('HTTP transport error', { error: err?.message });
-      await this.server.connect(transport);
-      await transport.start();
-      const httpServer = createServer((req, res) => transport.handleRequest(req as any, res));
-      await new Promise<void>((resolve) => httpServer.listen(port, host, resolve));
-      logger.info(`OCI Logan MCP Server v${SERVER_VERSION} running on http://${host}:${port}`);
+      // Use new HTTP transport with OAuth support
+      await startHTTPServer(this.server, SERVER_VERSION);
       return;
     }
 
+    // Default: stdio transport
     const transport = new StdioServerTransport();
     await this.server.connect(transport);
     logger.info(`OCI Logan MCP Server v${SERVER_VERSION} running on stdio`);

@@ -15,6 +15,42 @@ class QueryValidator:
             'OCI VCN Flow Unified Schema Logs'
         ]
         
+        # Natural language to proper query mappings for small LLMs
+        # These catch common mistakes from models that don't understand OCI Logan syntax
+        self.nl_query_patterns = {
+            # Log source queries - small LLMs often use SQL or natural language
+            'log_sources': {
+                'patterns': [
+                    'log source', 'log_source', 'logsource', 'list log',
+                    'show log', 'get log', 'log types', 'select log',
+                    'from logs', 'SELECT', 'FROM', 'stats count(log'
+                ],
+                'correct_query': "* | stats count as logrecords by 'Log Source' | sort -logrecords"
+            },
+            # Error queries
+            'errors': {
+                'patterns': [
+                    "severity = 'error'", 'severity=error', 'find error',
+                    'show error', 'get error', 'list error'
+                ],
+                'correct_query': "Severity = 'error'"
+            },
+            # Top errors
+            'top_errors': {
+                'patterns': [
+                    'top error', 'most error', 'common error', 'frequent error'
+                ],
+                'correct_query': "Severity = 'error' | stats count by Message | top 10 count"
+            },
+            # Database alerts
+            'db_alerts': {
+                'patterns': [
+                    'database alert', 'db alert', 'oracle alert', 'database instance'
+                ],
+                'correct_query': "'Entity Type' = 'Database Instance' AND Severity IN ('error', 'fatal') | stats count by Target"
+            }
+        }
+        
         # Field mappings for different log sources
         self.field_mappings = {
             'OCI VCN Flow Unified Schema Logs': {
@@ -46,9 +82,52 @@ class QueryValidator:
             'timestats': "* | timestats count by 'Log Source' span=1h"
         }
     
+    def normalize_llm_query(self, query):
+        """
+        Normalize natural language or SQL-like queries from small LLMs.
+        Small LLMs often generate SELECT/FROM syntax or natural language instead
+        of proper OCI Logging Analytics syntax.
+        
+        Returns the correct query if a pattern matches, otherwise returns None.
+        """
+        import re
+        query_lower = query.lower().strip()
+        
+        # Check for SQL-like patterns (SELECT, FROM)
+        if re.search(r'\bselect\b', query_lower) or re.search(r'\bfrom\s+logs?\b', query_lower):
+            # This is likely a malformed SQL query from a small LLM
+            # Try to figure out what they wanted
+            for category, config in self.nl_query_patterns.items():
+                for pattern in config['patterns']:
+                    if pattern.lower() in query_lower:
+                        return config['correct_query']
+            # Default for SQL queries about logs: show log sources
+            return self.nl_query_patterns['log_sources']['correct_query']
+        
+        # Check for natural language patterns
+        for category, config in self.nl_query_patterns.items():
+            for pattern in config['patterns']:
+                if pattern.lower() in query_lower:
+                    return config['correct_query']
+        
+        # No match found, return None to continue with normal processing
+        return None
+    
     def validate_and_fix_query(self, query):
         """Main validation and fixing method"""
         try:
+            # Step 0: Try to normalize natural language / SQL queries from small LLMs
+            normalized = self.normalize_llm_query(query)
+            if normalized:
+                return {
+                    'success': True,
+                    'original_query': query,
+                    'fixed_query': normalized,
+                    'validation_result': {'is_valid': True, 'warnings': ['Query normalized from natural language/SQL to OCI Logan syntax']},
+                    'warnings': ['Query normalized from natural language/SQL to OCI Logan syntax'],
+                    'was_normalized': True
+                }
+            
             # Check if this is a query that should be preserved as-is
             if self._should_preserve_query(query):
                 return {
