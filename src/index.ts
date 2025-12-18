@@ -39,7 +39,6 @@ const logger = createLogger('MCPServer');
 // Configuration constants
 const DEFAULT_COMPARTMENT_ID = process.env.OCI_COMPARTMENT_ID;
 const DEFAULT_REGION = process.env.OCI_REGION || 'us-ashburn-1';
-const EXAMPLE_COMPARTMENT_ID = 'ocid1.compartment.oc1..aaaaaaaa[your-compartment-id]';
 
 // Server version - update with releases
 const SERVER_VERSION = '3.0.0';

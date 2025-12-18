@@ -3,10 +3,10 @@
     "oci-logan": {
       "command": "node",
       "args": [
-        "/Users/abirzu/dev/mcp-oci-logan-server/dist/index.js"
+        "dist/index.js"
       ],
       "env": {
-        "OCI_COMPARTMENT_ID": "your_compartment_ocid_here",
+        "OCI_COMPARTMENT_ID": "<OCI_COMPARTMENT_ID>",
         "SUPPRESS_LABEL_WARNING": "True"
       }
     }
