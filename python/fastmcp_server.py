@@ -641,19 +641,21 @@ def main() -> None:
     Run the FastMCP server with configurable transport.
 
     Environment variables:
-    - MCP_TRANSPORT: Transport mode - "stdio" (default), "sse" (legacy), or "http" (recommended for remote)
-    - MCP_HTTP_HOST: HTTP bind host (default: 0.0.0.0)
-    - MCP_HTTP_PORT: HTTP port (default: 8001)
+    - MCP_TRANSPORT: Transport mode - "stdio" (default), "sse" (legacy), "http", or "streamable-http" (recommended for remote)
+    - MCP_HOST: Bind host for network transports (default: 0.0.0.0)
+    - MCP_PORT: Port for network transports (default: 8001)
+    - MCP_HTTP_HOST: Legacy bind host (fallback)
+    - MCP_HTTP_PORT: Legacy port (fallback)
     - MCP_HTTP_PATH: HTTP endpoint path (default: /mcp)
 
     Transport details:
     - stdio: Standard input/output for local development and Claude Desktop
     - sse: Server-Sent Events (legacy, use HTTP instead for new projects)
-    - http: Streamable HTTP transport (recommended for production/remote access)
+    - http / streamable-http: Streamable HTTP transport (recommended for production/remote access)
     """
     transport = os.getenv("MCP_TRANSPORT", "stdio").lower()
-    http_host = os.getenv("MCP_HTTP_HOST", "0.0.0.0")
-    http_port = int(os.getenv("MCP_HTTP_PORT", "8001"))
+    http_host = os.getenv("MCP_HOST", os.getenv("MCP_HTTP_HOST", "0.0.0.0"))
+    http_port = int(os.getenv("MCP_PORT", os.getenv("MCP_HTTP_PORT", "8001")))
     http_path = os.getenv("MCP_HTTP_PATH", "/mcp")
 
     logger.info(
@@ -661,7 +663,7 @@ def main() -> None:
         f"oauth={'enabled' if os.getenv('MCP_OAUTH_ENABLED', 'false').lower() == 'true' else 'disabled'}"
     )
 
-    if transport == "http":
+    if transport in ("http", "streamable-http"):
         # Streamable HTTP transport (recommended for production)
         logger.info(f"HTTP mode: http://{http_host}:{http_port}{http_path}")
         mcp.run(transport="http", host=http_host, port=http_port, path=http_path)

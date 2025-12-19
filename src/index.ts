@@ -29,9 +29,36 @@ import { ToolResult, PaginatedResponse } from './types/index.js';
 import { spawn } from 'child_process';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import fs from 'fs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+function loadEnvFile(filePath: string): void {
+  try {
+    if (!fs.existsSync(filePath)) return;
+    const raw = fs.readFileSync(filePath, 'utf8');
+    for (const line of raw.split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+      const eq = trimmed.indexOf('=');
+      if (eq <= 0) continue;
+      const key = trimmed.slice(0, eq).trim();
+      let value = trimmed.slice(eq + 1).trim();
+      if (!key || process.env[key] !== undefined) continue;
+      if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+        value = value.slice(1, -1);
+      }
+      process.env[key] = value;
+    }
+  } catch {
+    // best-effort
+  }
+}
+
+// Load repo-local .env.local first so OCI/OTEL config is applied even when `npm start` runs `dist/index.js`.
+loadEnvFile(path.resolve(__dirname, '..', '.env.local'));
+loadEnvFile(path.resolve(__dirname, '..', '.env'));
 
 // Logger for this module
 const logger = createLogger('MCPServer');
@@ -259,7 +286,7 @@ class OCILoganMCPServer {
         preferred: 'http',
         fallback: 'stdio',
         env: {
-          MCP_TRANSPORT: 'http|stdio',
+          MCP_TRANSPORT: 'http|streamable-http|stdio',
           MCP_HTTP_HOST: 'default 0.0.0.0',
           MCP_HTTP_PORT: 'default 8000'
         }
@@ -1800,7 +1827,7 @@ class OCILoganMCPServer {
   async run() {
     const transportEnv = (process.env.MCP_TRANSPORT || 'stdio').toLowerCase();
 
-    if (transportEnv === 'http') {
+    if (transportEnv === 'http' || transportEnv === 'streamable-http') {
       // Use new HTTP transport with OAuth support
       await startHTTPServer(this.server, SERVER_VERSION);
       return;

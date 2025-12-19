@@ -31,6 +31,17 @@ from typing import Annotated, Any, Dict, List, Optional
 
 from pydantic import Field
 
+# Load repo-local .env.local first so OCI/OTEL config is applied consistently.
+try:
+    from pathlib import Path
+    from dotenv import load_dotenv
+
+    _repo_root = Path(__file__).resolve().parent.parent
+    load_dotenv(_repo_root / ".env.local")
+    load_dotenv(_repo_root / ".env")
+except Exception:
+    pass
+
 # Stdio-safe logging (never stdout)
 logging.basicConfig(
     level=getattr(logging, os.getenv("MCP_LOG_LEVEL", "INFO").upper(), logging.INFO),
@@ -41,6 +52,21 @@ logger = logging.getLogger("oci_logan_mcp")
 
 # FastMCP imports
 from fastmcp import FastMCP
+
+# ----- Observability (optional) -----
+# Keep tracing optional and non-blocking; never print secrets.
+try:
+    from observability import (  # type: ignore
+        init_tracing,
+        instrument_requests,
+        instrument_starlette,
+        get_otel_status,
+    )
+except Exception:
+    init_tracing = None  # type: ignore
+    instrument_requests = None  # type: ignore
+    instrument_starlette = None  # type: ignore
+    get_otel_status = None  # type: ignore
 
 # =============================================================================
 # OAuth Configuration using OCIProvider (same pattern as OPSI)
@@ -101,8 +127,8 @@ def get_auth_provider(base_url: str) -> Any:
 # =============================================================================
 
 # Determine base URL for OAuth callbacks
-http_host = os.getenv("MCP_HTTP_HOST", "0.0.0.0")
-http_port = int(os.getenv("MCP_HTTP_PORT", "8001"))
+http_host = os.getenv("MCP_HOST", os.getenv("MCP_HTTP_HOST", "0.0.0.0"))
+http_port = int(os.getenv("MCP_PORT", os.getenv("MCP_HTTP_PORT", "8001")))
 # Use localhost for callbacks since 0.0.0.0 is not a valid callback URL
 callback_host = "localhost" if http_host == "0.0.0.0" else http_host
 base_url = os.getenv("MCP_BASE_URL", f"http://{callback_host}:{http_port}")
@@ -115,6 +141,18 @@ mcp = FastMCP(
     name="oci_logan_mcp",
     auth=auth_provider,
 )
+
+# Initialize tracing (optional) after server creation so HTTP apps can be instrumented.
+try:
+    os.environ.setdefault("OTEL_SERVICE_NAME", "oci-logan-mcp")
+    if init_tracing:
+        init_tracing(os.getenv("OTEL_SERVICE_NAME", "oci-logan-mcp"))
+    if instrument_requests:
+        instrument_requests()
+    if instrument_starlette:
+        instrument_starlette(mcp)
+except Exception:
+    pass
 
 # Lazy-loaded skill instances
 _log_analysis_skill = None
@@ -165,7 +203,7 @@ async def server_manifest() -> str:
         "name": "OCI Logan MCP Server",
         "version": "4.0.0",
         "description": "OCI Logging Analytics MCP Server with intelligent log analysis, security audit, and alert correlation",
-        "transport_options": ["stdio", "sse", "http"],
+        "transport_options": ["stdio", "sse", "http", "streamable-http"],
         "oauth_enabled": oauth_enabled,
         "oauth_provider": "OCI IAM (OCIProvider)" if oauth_enabled else None,
         "capabilities": {
@@ -215,9 +253,16 @@ Skills provide high-level workflows:
             "LOGAN_REGION",
             "OCI_CONFIG_FILE",
             "MCP_TRANSPORT",
+            "MCP_HOST",
+            "MCP_PORT",
             "FASTMCP_OAUTH_ENABLED",
             "FASTMCP_SERVER_AUTH_OCI_CONFIG_URL",
-            "FASTMCP_SERVER_AUTH_OCI_CLIENT_ID"
+            "FASTMCP_SERVER_AUTH_OCI_CLIENT_ID",
+            "OTEL_TRACING_ENABLED",
+            "OCI_APM_ENDPOINT",
+            "OCI_APM_PRIVATE_DATA_KEY",
+            "OTEL_EXPORTER_OTLP_ENDPOINT",
+            "OTEL_DISABLE_LOCAL",
         ]
     }
     return json.dumps(manifest, indent=2)
@@ -249,7 +294,11 @@ async def health(
         info["timestamp"] = datetime.now(timezone.utc).isoformat()
         info["python_version"] = sys.version
         info["skills"] = ["LogAnalysisSkill", "SecurityAuditSkill", "AlertCorrelationSkill"]
-        info["transports_available"] = ["stdio", "sse", "http"]
+        info["transports_available"] = ["stdio", "sse", "http", "streamable-http"]
+        try:
+            info["telemetry"] = get_otel_status() if get_otel_status else {"enabled": False, "status": "unavailable"}
+        except Exception:
+            info["telemetry"] = {"enabled": False, "status": "unavailable"}
 
         # OAuth status
         if oauth_enabled:
@@ -721,20 +770,22 @@ def main() -> None:
     Run the FastMCP server with configurable transport.
 
     Environment variables:
-    - MCP_TRANSPORT: Transport mode - "stdio" (default), "sse" (legacy), or "http" (recommended for remote)
-    - MCP_HTTP_HOST: HTTP bind host (default: 0.0.0.0)
-    - MCP_HTTP_PORT: HTTP port (default: 8001)
+    - MCP_TRANSPORT: Transport mode - "stdio" (default), "sse" (legacy), "http", or "streamable-http" (recommended for remote)
+    - MCP_HOST: Bind host for network transports (default: 0.0.0.0)
+    - MCP_PORT: Port for network transports (default: 8001)
+    - MCP_HTTP_HOST: Legacy bind host (fallback)
+    - MCP_HTTP_PORT: Legacy port (fallback)
     - MCP_HTTP_PATH: HTTP endpoint path (default: /mcp)
     - FASTMCP_OAUTH_ENABLED: Enable OAuth authentication (default: false)
 
     Transport details:
     - stdio: Standard input/output for local development and Claude Desktop
     - sse: Server-Sent Events (legacy, use HTTP instead for new projects)
-    - http: Streamable HTTP transport (recommended for production/remote access)
+    - http / streamable-http: Streamable HTTP transport (recommended for production/remote access)
     """
     transport = os.getenv("MCP_TRANSPORT", "stdio").lower()
-    http_host = os.getenv("MCP_HTTP_HOST", "0.0.0.0")
-    http_port = int(os.getenv("MCP_HTTP_PORT", "8001"))
+    http_host = os.getenv("MCP_HOST", os.getenv("MCP_HTTP_HOST", "0.0.0.0"))
+    http_port = int(os.getenv("MCP_PORT", os.getenv("MCP_HTTP_PORT", "8001")))
     http_path = os.getenv("MCP_HTTP_PATH", "/mcp")
     oauth_enabled = os.getenv("FASTMCP_OAUTH_ENABLED", "false").lower() == "true"
 
@@ -744,7 +795,7 @@ def main() -> None:
         f"skills=[LogAnalysis, SecurityAudit, AlertCorrelation]"
     )
 
-    if transport == "http":
+    if transport in ("http", "streamable-http"):
         # Streamable HTTP transport (recommended for production)
         logger.info(f"HTTP mode: http://{http_host}:{http_port}{http_path}")
         if oauth_enabled:

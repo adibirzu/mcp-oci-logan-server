@@ -84,7 +84,7 @@ class DashboardClient:
             # For now, return some example dashboard information
             sample_dashboards = [
                 {
-                    "id": "ocid1.dashboard.oc1..sample1",
+                    "id": "dashboard-sample-1",
                     "displayName": "Security Overview Dashboard",
                     "description": "Overview of security events and alerts from Log Analytics",
                     "compartmentId": self.compartment_id,
@@ -95,7 +95,7 @@ class DashboardClient:
                     "lifecycleState": "ACTIVE"
                 },
                 {
-                    "id": "ocid1.dashboard.oc1..sample2",
+                    "id": "dashboard-sample-2",
                     "displayName": "Network Traffic Analysis",
                     "description": "VCN Flow logs analysis and network patterns",
                     "compartmentId": self.compartment_id,
@@ -106,7 +106,7 @@ class DashboardClient:
                     "lifecycleState": "ACTIVE"
                 },
                 {
-                    "id": "ocid1.dashboard.oc1..sample3",
+                    "id": "dashboard-sample-3",
                     "displayName": "Audit Events Dashboard",
                     "description": "OCI Audit events and compliance monitoring",
                     "compartmentId": self.compartment_id,
@@ -141,9 +141,9 @@ class DashboardClient:
         """Get a specific dashboard by ID - returns sample data"""
         try:
             # For demonstration, return sample dashboard details
-            if dashboard_id == "ocid1.dashboard.oc1..sample1":
+            if dashboard_id == "dashboard-sample-1":
                 dashboard = {
-                    "id": "ocid1.dashboard.oc1..sample1",
+                    "id": "dashboard-sample-1",
                     "displayName": "Security Overview Dashboard",
                     "description": "Overview of security events and alerts from Log Analytics",
                     "compartmentId": self.compartment_id,
@@ -169,9 +169,9 @@ class DashboardClient:
                         }
                     ]
                 }
-            elif dashboard_id == "ocid1.dashboard.oc1..sample2":
+            elif dashboard_id == "dashboard-sample-2":
                 dashboard = {
-                    "id": "ocid1.dashboard.oc1..sample2",
+                    "id": "dashboard-sample-2",
                     "displayName": "Network Traffic Analysis",
                     "description": "VCN Flow logs analysis and network patterns",
                     "compartmentId": self.compartment_id,

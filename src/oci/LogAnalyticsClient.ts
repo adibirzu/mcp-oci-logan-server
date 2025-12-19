@@ -160,11 +160,14 @@ export class LogAnalyticsClient {
 
   private async loadOCIConfig() {
     try {
-      const configPath = path.join(homedir(), '.oci', 'config');
+      const configPath = process.env.OCI_CONFIG_FILE
+        ? path.resolve(process.env.OCI_CONFIG_FILE)
+        : path.join(homedir(), '.oci', 'config');
       const configContent = await fs.readFile(configPath, 'utf8');
       
       // Parse OCI config file
       const lines = configContent.split('\n');
+      const preferredProfile = process.env.OCI_CLI_PROFILE || 'DEFAULT';
       let currentProfile = 'DEFAULT';
       const profiles: { [key: string]: any } = {};
       
@@ -181,7 +184,7 @@ export class LogAnalyticsClient {
         }
       }
 
-      this.config = profiles['DEFAULT'] || profiles[Object.keys(profiles)[0]] || {};
+      this.config = profiles[preferredProfile] || profiles['DEFAULT'] || profiles[Object.keys(profiles)[0]] || {};
       this.configSource = Object.keys(this.config).length > 0 ? 'file' : 'none';
     } catch (error) {
       console.error('Failed to load OCI config:', error);
@@ -1008,7 +1011,7 @@ export class LogAnalyticsClient {
     dashboardConfig?: any;
   }): Promise<any> {
     // For now, return a mock response since real dashboard creation requires specific API access
-    const dashboardId = `ocid1.dashboard.oc1..${Date.now()}`;
+    const dashboardId = `dashboard-${Date.now()}`;
     
     return {
       success: true,
@@ -1050,7 +1053,7 @@ export class LogAnalyticsClient {
     widgetType?: string;
   }): Promise<any> {
     // For demonstration, create a saved search object
-    const searchId = `ocid1.savedsearch.oc1..${Date.now()}`;
+    const searchId = `savedsearch-${Date.now()}`;
     
     return {
       success: true,
@@ -1074,7 +1077,7 @@ export class LogAnalyticsClient {
     // Return sample saved searches
     const savedSearches = [
       {
-        id: 'ocid1.savedsearch.oc1..sample1',
+        id: 'savedsearch-sample-1',
         displayName: 'Top Error Messages',
         query: '* | where level = "ERROR" | stats count by message | sort -count | head 10',
         widgetType: 'TABLE',
@@ -1082,7 +1085,7 @@ export class LogAnalyticsClient {
         timeUpdated: new Date().toISOString()
       },
       {
-        id: 'ocid1.savedsearch.oc1..sample2',
+        id: 'savedsearch-sample-2',
         displayName: 'Login Activity Timeline',
         query: '\'Log Source\' = "OCI Audit Logs" and eventName = "Login" | timestats count',
         widgetType: 'LINE_CHART',
@@ -1090,7 +1093,7 @@ export class LogAnalyticsClient {
         timeUpdated: new Date().toISOString()
       },
       {
-        id: 'ocid1.savedsearch.oc1..sample3',
+        id: 'savedsearch-sample-3',
         displayName: 'Network Traffic by Protocol',
         query: '\'Log Source\' = "OCI VCN Flow Unified Schema Logs" | stats count by protocol | sort -count',
         widgetType: 'PIE_CHART',

@@ -8,6 +8,15 @@ This software was created to showcase Oracle Cloud Infrastructure (OCI) Logging 
 
 ---
 
+## Standards
+
+- `/Users/abirzu/dev/oracle-db-autonomous-agent/docs/OCI_MCP_SERVER_STANDARD.md`
+
+## Transport & Auth
+
+- **Local development**: STDIO only
+- **Production/remote**: Streamable HTTP with OAuth enabled
+
 ## 🚀 v2.0.0 Update - HTTP Transport with OAuth Authentication
 
 **NEW IN v2.0.0**: Full HTTP transport support with OAuth 2.0 authentication for production deployments!
@@ -126,12 +135,12 @@ oci setup config
 
 **Option B: Environment Variables**
 ```bash
-export OCI_USER_ID="ocid1.user.oc1..xxx"
-export OCI_FINGERPRINT="xx:xx:xx..."
-export OCI_TENANCY_ID="ocid1.tenancy.oc1..xxx"
+export OCI_USER_ID="[Link to Secure Variable: OCI_USER_ID]"
+export OCI_FINGERPRINT="[Link to Secure Variable: OCI_FINGERPRINT]"
+export OCI_TENANCY_ID="[Link to Secure Variable: OCI_TENANCY_ID]"
 export OCI_REGION="us-ashburn-1"
 export OCI_KEY_FILE="/path/to/private/key.pem"
-export OCI_COMPARTMENT_ID="ocid1.compartment.oc1..xxx"
+export OCI_COMPARTMENT_ID="[Link to Secure Variable: OCI_COMPARTMENT_ID]"
 ```
 
 **Option C: Instance Principal (for OCI Compute)**
@@ -148,7 +157,7 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
       "command": "node",
       "args": ["/ABSOLUTE/PATH/TO/mcp-oci-logan-server/dist/index.js"],
       "env": {
-        "OCI_COMPARTMENT_ID": "ocid1.compartment.oc1..your-id",
+        "OCI_COMPARTMENT_ID": "[Link to Secure Variable: OCI_COMPARTMENT_ID]",
         "OCI_REGION": "us-ashburn-1",
         "SUPPRESS_LABEL_WARNING": "True",
         "LOGAN_DEBUG": "false"
@@ -193,7 +202,7 @@ Claude Desktop config example:
       "command": "python",
       "args": ["/ABSOLUTE/PATH/TO/mcp-oci-logan-server/python/fastmcp_server.py"],
       "env": {
-        "LOGAN_COMPARTMENT_ID": "ocid1.compartment.oc1..your-id",
+        "LOGAN_COMPARTMENT_ID": "[Link to Secure Variable: LOGAN_COMPARTMENT_ID]",
         "LOGAN_REGION": "us-ashburn-1",
         "LOGAN_DEBUG": "false"
       }
@@ -245,10 +254,10 @@ MCP_TRANSPORT=http MCP_HTTP_PORT=8001 python main.py
 MCP_TRANSPORT=http \
 MCP_HTTP_PORT=8001 \
 MCP_OAUTH_ENABLED=true \
-MCP_OAUTH_ISSUER_URL=https://idcs-xxxxx.identity.oraclecloud.com \
-MCP_OAUTH_INTROSPECTION_URL=https://idcs-xxxxx.identity.oraclecloud.com/oauth2/v1/introspect \
-MCP_OAUTH_CLIENT_ID=your-client-id \
-MCP_OAUTH_CLIENT_SECRET=your-client-secret \
+MCP_OAUTH_ISSUER_URL=[Link to Secure Variable: MCP_OAUTH_ISSUER_URL] \
+MCP_OAUTH_INTROSPECTION_URL=[Link to Secure Variable: MCP_OAUTH_INTROSPECTION_URL] \
+MCP_OAUTH_CLIENT_ID=[Link to Secure Variable: MCP_OAUTH_CLIENT_ID] \
+MCP_OAUTH_CLIENT_SECRET=[Link to Secure Variable: MCP_OAUTH_CLIENT_SECRET] \
 MCP_OAUTH_REQUIRED_SCOPES=mcp:tools \
 python main.py
 ```
@@ -266,10 +275,10 @@ MCP_TRANSPORT=http MCP_HTTP_PORT=8000 node dist/index.js
 MCP_TRANSPORT=http \
 MCP_HTTP_PORT=8000 \
 MCP_OAUTH_ENABLED=true \
-MCP_OAUTH_ISSUER_URL=https://idcs-xxxxx.identity.oraclecloud.com \
-MCP_OAUTH_INTROSPECTION_URL=https://idcs-xxxxx.identity.oraclecloud.com/oauth2/v1/introspect \
-MCP_OAUTH_CLIENT_ID=your-client-id \
-MCP_OAUTH_CLIENT_SECRET=your-client-secret \
+MCP_OAUTH_ISSUER_URL=[Link to Secure Variable: MCP_OAUTH_ISSUER_URL] \
+MCP_OAUTH_INTROSPECTION_URL=[Link to Secure Variable: MCP_OAUTH_INTROSPECTION_URL] \
+MCP_OAUTH_CLIENT_ID=[Link to Secure Variable: MCP_OAUTH_CLIENT_ID] \
+MCP_OAUTH_CLIENT_SECRET=[Link to Secure Variable: MCP_OAUTH_CLIENT_SECRET] \
 node dist/index.js
 ```
 
@@ -299,12 +308,12 @@ For OCI IDCS (Identity Cloud Service):
 3. **Set Environment Variables**:
 ```bash
 export MCP_OAUTH_ENABLED=true
-export MCP_OAUTH_ISSUER_URL=https://idcs-xxxxx.identity.oraclecloud.com
-export MCP_OAUTH_INTROSPECTION_URL=https://idcs-xxxxx.identity.oraclecloud.com/oauth2/v1/introspect
-export MCP_OAUTH_CLIENT_ID=your-idcs-client-id
-export MCP_OAUTH_CLIENT_SECRET=your-idcs-client-secret
+export MCP_OAUTH_ISSUER_URL=[Link to Secure Variable: MCP_OAUTH_ISSUER_URL]
+export MCP_OAUTH_INTROSPECTION_URL=[Link to Secure Variable: MCP_OAUTH_INTROSPECTION_URL]
+export MCP_OAUTH_CLIENT_ID=[Link to Secure Variable: MCP_OAUTH_CLIENT_ID]
+export MCP_OAUTH_CLIENT_SECRET=[Link to Secure Variable: MCP_OAUTH_CLIENT_SECRET]
 export MCP_OAUTH_REQUIRED_SCOPES=mcp:tools
-export MCP_OAUTH_AUDIENCE=https://your-mcp-server.example.com  # optional
+export MCP_OAUTH_AUDIENCE=[Link to Secure Variable: MCP_OAUTH_AUDIENCE]  # optional
 ```
 
 ### Testing HTTP Transport
@@ -324,9 +333,11 @@ curl -H "Authorization: Bearer YOUR_TOKEN" http://localhost:8001/sse
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `MCP_TRANSPORT` | Transport type: `stdio` or `http` | `stdio` |
-| `MCP_HTTP_HOST` | HTTP server bind address | `0.0.0.0` |
-| `MCP_HTTP_PORT` | HTTP server port (8001 for IDCS) | `8001` |
+| `MCP_TRANSPORT` | Transport type: `stdio`, `http`, `sse`, or `streamable-http` | `stdio` |
+| `MCP_HOST` | Bind host for network transports | `0.0.0.0` |
+| `MCP_PORT` | Port for network transports | `8001` |
+| `MCP_HTTP_HOST` | Legacy HTTP bind address (fallback) | `0.0.0.0` |
+| `MCP_HTTP_PORT` | Legacy HTTP port (fallback) | `8001` |
 | `MCP_HTTP_CORS` | Enable CORS | `true` |
 | `MCP_HTTP_CORS_ORIGINS` | Allowed origins (comma-separated) | `*` |
 | `MCP_OAUTH_ENABLED` | Enable OAuth authentication | `false` |
@@ -339,6 +350,11 @@ curl -H "Authorization: Bearer YOUR_TOKEN" http://localhost:8001/sse
 | `MCP_OAUTH_TOKEN_CACHE_TTL` | Token cache TTL in seconds | `300` |
 | `MCP_SESSION_TIMEOUT` | Session timeout in ms | `3600000` |
 | `MCP_MAX_SESSIONS` | Maximum concurrent sessions | `100` |
+| `OTEL_TRACING_ENABLED` | Enable tracing | `true` |
+| `OCI_APM_ENDPOINT` | OCI APM OTLP endpoint | - |
+| `OCI_APM_PRIVATE_DATA_KEY` | OCI APM private data key | - |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | Generic OTLP endpoint | - |
+| `OTEL_DISABLE_LOCAL` | Disable local collector fallback | `false` |
 
 ---
 
@@ -374,9 +390,9 @@ Analyze all activity for IP address 192.168.1.100 in the last 24 hours
 ```
 List all active dashboards in your compartment
 
-Get dashboard details for ocid1.dashboard.oc1..example123
+Get dashboard details for [Link to Secure Variable: LOGAN_DASHBOARD_OCID]
 
-Export dashboard ocid1.dashboard.oc1..example123 as JSON
+Export dashboard [Link to Secure Variable: LOGAN_DASHBOARD_OCID] as JSON
 ```
 
 ### Saved Search Management
@@ -593,11 +609,11 @@ For multiple OCI environments, create a configuration file:
 {
   "environments": {
     "production": {
-      "compartmentId": "ocid1.compartment.oc1..prod",
+      "compartmentId": "[Link to Secure Variable: OCI_COMPARTMENT_ID]",
       "region": "us-ashburn-1"
     },
     "development": {
-      "compartmentId": "ocid1.compartment.oc1..dev", 
+      "compartmentId": "[Link to Secure Variable: OCI_COMPARTMENT_ID]",
       "region": "us-phoenix-1"
     }
   }
@@ -874,9 +890,11 @@ See [`docs/README.md`](docs/README.md) for a complete documentation index.
 - `python/main.py` - Updated with HTTP transport & OAuth support
 
 **Environment Variables Added**:
-- `MCP_TRANSPORT` - Transport type: `stdio` or `http`
-- `MCP_HTTP_HOST`, `MCP_HTTP_PORT` - HTTP server configuration
+- `MCP_TRANSPORT` - Transport type: `stdio`, `http`, `sse`, or `streamable-http`
+- `MCP_HOST`, `MCP_PORT` - Network transport bind configuration
+- `MCP_HTTP_HOST`, `MCP_HTTP_PORT` - Legacy HTTP bind configuration (fallback)
 - `MCP_OAUTH_ENABLED`, `MCP_OAUTH_*` - OAuth configuration
+- `OTEL_TRACING_ENABLED`, `OCI_APM_ENDPOINT`, `OCI_APM_PRIVATE_DATA_KEY` - Optional OCI APM tracing
 - See [HTTP Transport & OAuth](#http-transport--oauth-authentication) for full reference
 
 ### v1.3.0 - Critical Fix & Complete Documentation (October 2025)

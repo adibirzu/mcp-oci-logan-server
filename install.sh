@@ -388,7 +388,7 @@ EOF
       "command": "node",
       "args": ["/ABSOLUTE/PATH/TO/mcp-oci-logan-server/dist/index.js"],
       "env": {
-        "OCI_COMPARTMENT_ID": "ocid1.compartment.oc1..your-id",
+        "OCI_COMPARTMENT_ID": "[Link to Secure Variable: OCI_COMPARTMENT_ID]",
         "OCI_REGION": "us-ashburn-1",
         "SUPPRESS_LABEL_WARNING": "True",
         "LOGAN_DEBUG": "false"

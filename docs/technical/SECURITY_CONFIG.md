@@ -8,12 +8,12 @@ This guide ensures proper security configuration by using environment variables,
 
 ### 1. Environment Variables Configuration
 
-**Create .env file (NEVER commit this file):**
+**Create .env.local file (NEVER commit this file):**
 ```bash
-cp .env.template .env
+cp .env.template .env.local
 ```
 
-**Edit .env with your actual values:**
+**Edit .env.local with your actual values:**
 ```bash
 # Required: Your OCI Compartment ID
 OCI_COMPARTMENT_ID=ocid1.compartment.oc1..aaaaaaaa[your-actual-compartment-id]
@@ -67,7 +67,7 @@ cp claude_desktop_config.json.template claude_desktop_config.json
 ## 🛡️ What's Protected
 
 ### Files Never Committed to Git
-- `.env` - Environment variables with actual values
+- `.env.local` - Environment variables with actual values
 - `claude_desktop_config.json` - Personal configuration
 - `~/.oci/config` - OCI CLI configuration
 - `*.pem`, `*.key` - Private keys
@@ -203,7 +203,7 @@ node test-oci-direct.js
 
 3. **Update all configurations**
    - Generate new OCI API key
-   - Update .env file
+   - Update .env.local file
    - Test connections
 
 ## 📋 Security Checklist
@@ -213,7 +213,7 @@ Before committing code:
 - [ ] No real OCIDs in source code (only placeholders with brackets)
 - [ ] No private keys or certificates committed
 - [ ] Environment variables used for sensitive data
-- [ ] .env file added to .gitignore
+- [ ] .env.local file added to .gitignore
 - [ ] claude_desktop_config.json not committed
 - [ ] Test files use environment variables or placeholders
 - [ ] Documentation uses example values only

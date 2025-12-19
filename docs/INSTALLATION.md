@@ -182,12 +182,12 @@ Follow the prompts to create `~/.oci/config`.
 Add to your shell profile (~/.bashrc, ~/.zshrc):
 
 ```bash
-export OCI_USER_ID="ocid1.user.oc1..xxx"
+export OCI_USER_ID="[Link to Secure Variable: OCI_USER_ID]"
 export OCI_FINGERPRINT="xx:xx:xx:xx..."
-export OCI_TENANCY_ID="ocid1.tenancy.oc1..xxx"
+export OCI_TENANCY_ID="[Link to Secure Variable: OCI_TENANCY_ID]"
 export OCI_REGION="us-ashburn-1"
 export OCI_KEY_FILE="~/.oci/oci_api_key.pem"
-export OCI_COMPARTMENT_ID="ocid1.compartment.oc1..xxx"
+export OCI_COMPARTMENT_ID="[Link to Secure Variable: OCI_COMPARTMENT_ID]"
 ```
 
 ### Step 6: Configure Claude Desktop
@@ -201,7 +201,7 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
       "command": "node",
       "args": ["/ABSOLUTE/PATH/TO/mcp-oci-logan-server/dist/index.js"],
       "env": {
-        "OCI_COMPARTMENT_ID": "ocid1.compartment.oc1..your-compartment-id",
+        "OCI_COMPARTMENT_ID": "[Link to Secure Variable: OCI_COMPARTMENT_ID]",
         "OCI_REGION": "us-ashburn-1",
         "SUPPRESS_LABEL_WARNING": "True",
         "LOGAN_DEBUG": "false"
@@ -211,7 +211,7 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
       "command": "python",
       "args": ["/ABSOLUTE/PATH/TO/mcp-oci-logan-server/python/fastmcp_server.py"],
       "env": {
-        "LOGAN_COMPARTMENT_ID": "ocid1.compartment.oc1..your-compartment-id",
+        "LOGAN_COMPARTMENT_ID": "[Link to Secure Variable: LOGAN_COMPARTMENT_ID]",
         "LOGAN_REGION": "us-ashburn-1",
         "LOGAN_DEBUG": "false"
       }
@@ -270,7 +270,7 @@ PY
       "command": "node",
       "args": ["/path/to/dist/index.js"],
       "env": {
-        "OCI_COMPARTMENT_ID": "ocid1.compartment.oc1..xxx"
+        "OCI_COMPARTMENT_ID": "[Link to Secure Variable: OCI_COMPARTMENT_ID]"
       }
     }
   }
@@ -285,7 +285,7 @@ PY
       "command": "node",
       "args": ["/path/to/dist/index.js"],
       "env": {
-        "OCI_COMPARTMENT_ID": "ocid1.compartment.oc1..xxx",
+        "OCI_COMPARTMENT_ID": "[Link to Secure Variable: OCI_COMPARTMENT_ID]",
         "OCI_REGION": "us-ashburn-1",
         "LOGAN_DEBUG": "false",
         "LOGAN_PROJECT_PATH": "/path/to/logan-security-dashboard",
@@ -304,7 +304,7 @@ PY
       "command": "node",
       "args": ["/path/to/dist/index.js"],
       "env": {
-        "OCI_COMPARTMENT_ID": "ocid1.compartment.oc1..xxx",
+        "OCI_COMPARTMENT_ID": "[Link to Secure Variable: OCI_COMPARTMENT_ID]",
         "OCI_REGION": "us-ashburn-1",
         "LOGAN_DEBUG": "true"
       }

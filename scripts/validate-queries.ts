@@ -240,7 +240,7 @@ async function main() {
   // Check prerequisites
   if (!CONFIG.compartmentId && !CONFIG.dryRun) {
     console.error('\nError: OCI_COMPARTMENT_ID environment variable is required');
-    console.error('Set it with: export OCI_COMPARTMENT_ID="ocid1.compartment.oc1..xxx"');
+    console.error('Set it with: export OCI_COMPARTMENT_ID="[Link to Secure Variable: OCI_COMPARTMENT_ID]"');
     process.exit(1);
   }
 

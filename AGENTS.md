@@ -95,7 +95,7 @@ npm install && npm start
 
 ```bash
 # Required
-LOGAN_COMPARTMENT_ID=ocid1.compartment...
+LOGAN_COMPARTMENT_ID=[Link to Secure Variable: LOGAN_COMPARTMENT_ID]
 LOGAN_REGION=us-ashburn-1
 
 # Optional

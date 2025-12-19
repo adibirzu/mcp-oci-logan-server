@@ -209,11 +209,11 @@ def test_adapters():
     
     # Test LogEntity dataclass
     entity = LogEntity(
-        id="ocid1.entity...",
+        id="entity-placeholder",
         name="test-host",
         entity_type="HOST",
         hostname="test-host.local",
-        compartment_id="ocid1.compartment...",
+        compartment_id="compartment-placeholder",
         lifecycle_state="ACTIVE"
     )
     assert entity.lifecycle_state == "ACTIVE"
