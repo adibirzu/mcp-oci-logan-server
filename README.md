@@ -10,7 +10,7 @@ This software was created to showcase Oracle Cloud Infrastructure (OCI) Logging 
 
 ## Standards
 
-- `/Users/abirzu/dev/oracle-db-autonomous-agent/docs/OCI_MCP_SERVER_STANDARD.md`
+- `docs/OCI_MCP_SERVER_STANDARD.md`
 
 ## Transport & Auth
 

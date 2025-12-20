@@ -56,9 +56,8 @@ function loadEnvFile(filePath: string): void {
   }
 }
 
-// Load repo-local .env.local first so OCI/OTEL config is applied even when `npm start` runs `dist/index.js`.
+// Load repo-local .env.local so OCI/OTEL config is applied even when `npm start` runs `dist/index.js`.
 loadEnvFile(path.resolve(__dirname, '..', '.env.local'));
-loadEnvFile(path.resolve(__dirname, '..', '.env'));
 
 // Logger for this module
 const logger = createLogger('MCPServer');

@@ -11,8 +11,8 @@ import {
 } from '../../src/tools/definitions.js';
 
 describe('TOOL_DEFINITIONS', () => {
-  it('should define 33 tools', () => {
-    expect(TOOL_DEFINITIONS.length).toBe(33);
+  it('should define 35 tools', () => {
+    expect(TOOL_DEFINITIONS.length).toBe(35);
   });
 
   it('should have all tools with oci_logan_ prefix', () => {
@@ -120,7 +120,7 @@ describe('Tool input schemas', () => {
 describe('getToolDefinitions', () => {
   it('should return formatted tool definitions', () => {
     const tools = getToolDefinitions();
-    expect(tools.length).toBe(33);
+    expect(tools.length).toBe(35);
 
     for (const tool of tools) {
       expect(tool).toHaveProperty('name');
