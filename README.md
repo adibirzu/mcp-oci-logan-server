@@ -12,6 +12,10 @@ This software was created to showcase Oracle Cloud Infrastructure (OCI) Logging 
 
 - `docs/OCI_MCP_SERVER_STANDARD.md`
 
+## Runbooks
+
+- `docs/runbooks/README.md`
+
 ## Transport & Auth
 
 - **Local development**: STDIO only

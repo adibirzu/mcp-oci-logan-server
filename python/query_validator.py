@@ -196,8 +196,11 @@ class QueryValidator:
     
     def _fix_basic_syntax(self, query):
         """Fix basic OCI Logging Analytics syntax issues"""
-        # Fix null comparisons
-        query = query.replace("!= null", "is not null")
+        # Fix null comparisons - OCI API uses empty string check for null
+        # Note: While "is not null" is the documented syntax, the OCI API
+        # actually requires != "" for proper null checks in many contexts
+        query = query.replace("!= null", '!= ""')
+        query = query.replace("is not null", '!= ""')
         query = query.replace("== null", "is null")
         
         # Fix quotes in value lists
@@ -310,7 +313,9 @@ class QueryValidator:
     def _minimal_query_fixes(self, query):
         """Apply only minimal fixes to preserve complex queries"""
         # Only fix the most basic syntax issues
-        query = query.replace("!= null", "is not null")
+        # Note: Use != "" for null checks as the OCI API requires this
+        query = query.replace("!= null", '!= ""')
+        query = query.replace("is not null", '!= ""')
         query = query.replace("== null", "is null")
         
         # Fix basic quote issues in value lists

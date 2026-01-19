@@ -2,6 +2,8 @@
 """
 Direct OCI Logging Analytics Client
 Enhanced with improved time handling and UTC consistency
+
+Query transformation is centralized in query_validator.py for consistency.
 """
 
 import oci
@@ -10,6 +12,9 @@ import sys
 import os
 from datetime import datetime, timedelta, timezone
 import argparse
+
+# Import the centralized query validator
+from query_validator import QueryValidator
 
 class LoganClient:
     def __init__(self, compartment_id=None):
@@ -84,43 +89,18 @@ class LoganClient:
                 sys.stderr.write(f"LoganClient: Query length: {len(query)}\n")
             
             if bypass_all_processing:
-                # Complete bypass - but still need minimal OCI API compatibility fixes
-                console_query = query.replace("!= null", "!= \"\"").replace("is not null", "!= \"\"")
-                # Also fix != value patterns that OCI API doesn't support
-                import re
-                pattern = r"(\w+)\s*!=\s*([^\s|]+)"
-                matches = re.findall(pattern, console_query)
-                for field, value in matches:
-                    if value != "null":
-                        old_expr = f"{field} != {value}"
-                        new_expr = f"{field} != \"\""
-                        console_query = console_query.replace(old_expr, new_expr)
-                        if os.getenv('LOGAN_DEBUG') == 'true':
-                            sys.stderr.write(f"LoganClient: API compatibility fix: '{old_expr}' -> '{new_expr}'\n")
-                
+                # Complete bypass - only minimal OCI API compatibility fixes
+                console_query = query.replace("!= null", '!= ""').replace("is not null", '!= ""')
                 if os.getenv('LOGAN_DEBUG') == 'true':
-                    sys.stderr.write(f"LoganClient: Complete bypass enabled - only API compatibility fixes applied\n")
+                    sys.stderr.write(f"LoganClient: Complete bypass enabled - only minimal fixes applied\n")
             else:
-                # Try minimal conversion - fix != operators for OCI compatibility
-                console_query = query.replace("!= null", "!= \"\"").replace("is not null", "!= \"\"")
-                
-                # Also fix specific value comparisons like != T1574.002
-                import re
-                # Pattern to match field != value (but not != null which we already handled)
-                pattern = r"(\w+)\s*!=\s*([^\s|]+)"
-                matches = re.findall(pattern, console_query)
-                
-                for field, value in matches:
-                    if value != "null":  # Skip null comparisons we already handled
-                        # Convert field != value to field is not null (simpler approach)
-                        old_expr = f"{field} != {value}"
-                        new_expr = f"{field} != \"\""
-                        console_query = console_query.replace(old_expr, new_expr)
-                        if os.getenv('LOGAN_DEBUG') == 'true':
-                            sys.stderr.write(f"LoganClient: Converted '{old_expr}' to '{new_expr}' for OCI compatibility\n")
-                
+                # Use centralized query transformation via _fix_query_syntax
+                # This ensures consistency with regular execute_query path
+                console_query = self._fix_query_syntax(query)
+
                 if console_query != query and os.getenv('LOGAN_DEBUG') == 'true':
-                    sys.stderr.write(f"LoganClient: Final converted query: {console_query}\n")
+                    sys.stderr.write(f"LoganClient: Query transformed by QueryValidator\n")
+                    sys.stderr.write(f"LoganClient: Final query: {console_query}\n")
             
             # Create query details matching console parameters exactly
             query_details = {
@@ -284,48 +264,45 @@ class LoganClient:
                 return {"error": str(e), "success": False}
     
     def _fix_query_syntax(self, query):
-        """Fix common OCI Logging Analytics query syntax issues"""
-        # Fix Action field syntax - remove quotes and use proper syntax
-        query = query.replace("Action in (drop, reject)", "Action in ('drop', 'reject')")
-        
-        # Fix != null syntax to proper OCI syntax - use exists/not empty check
-        query = query.replace("!= null", "!= \"\"").replace("is not null", "!= \"\"")
-        
-        # Fix stats function syntax - OCI Logging Analytics uses different syntax
-        import re
-        
-        # Fix count(*) to count() - OCI doesn't support count(*)
-        query = query.replace("stats count(*)", "stats count")
-        
-        # Fix count(field) syntax - fix WAF-specific syntax issues
-        # Special handling for WAF queries with count('Host IP Address (Client)')
-        if "WAF" in query and "count('Host IP Address (Client)')" in query:
-            query = query.replace("count('Host IP Address (Client)')", "count")
-        
-        # General count(field) syntax fix
-        count_field_pattern = r"stats count\(['\"]?([^')]+)['\"]?\)"
-        if re.search(count_field_pattern, query):
-            # For WAF and other specific log sources, try to use count() without field
-            if "WAF" in query or "Suricata" in query:
-                query = re.sub(count_field_pattern, "stats count", query)
+        """Fix common OCI Logging Analytics query syntax issues.
+
+        Uses the centralized QueryValidator for comprehensive transformations.
+        This ensures consistency with query validation and the same rules are
+        applied whether validating or executing queries.
+        """
+        try:
+            # Use centralized validator for comprehensive transformations
+            validator = QueryValidator()
+            result = validator.validate_and_fix_query(query)
+
+            if result.get('success') and result.get('fixed_query'):
+                fixed_query = result['fixed_query']
+
+                # Log if the query was modified (debug mode only)
+                if os.getenv('LOGAN_DEBUG') == 'true' and fixed_query != query:
+                    sys.stderr.write(f"QueryValidator transformed query:\n")
+                    sys.stderr.write(f"  Original: {query}\n")
+                    sys.stderr.write(f"  Fixed: {fixed_query}\n")
+                    if result.get('warnings'):
+                        sys.stderr.write(f"  Warnings: {result['warnings']}\n")
+
+                return fixed_query
             else:
-                # For VCN Flow logs, just use count without parentheses
-                query = re.sub(count_field_pattern, "stats count", query)
-        
-        # Fix field references to match OCI schema
-        query = query.replace("'Event ID'", "'Event Type'")
-        
-        # Fix top command syntax
-        query = query.replace("| top 10 Count", "| sort -Count | head 10")
-        
-        # Remove lookup commands that might not be available (but preserve WAF lookups)
-        if "| lookup" in query and "WAF" not in query and "Suricata" not in query:
-            # Remove lookup part and everything after it
-            lookup_pos = query.find("| lookup")
-            if lookup_pos > 0:
-                query = query[:lookup_pos].strip()
-        
-        return query
+                # If validation failed, return original and log error
+                if os.getenv('LOGAN_DEBUG') == 'true':
+                    sys.stderr.write(f"QueryValidator failed: {result.get('error', 'Unknown error')}\n")
+                return query
+
+        except Exception as e:
+            # Fallback to basic fixes if validator fails
+            if os.getenv('LOGAN_DEBUG') == 'true':
+                sys.stderr.write(f"QueryValidator exception, falling back to basic fixes: {e}\n")
+
+            # Basic fallback transformations
+            query = query.replace("!= null", '!= ""').replace("is not null", '!= ""')
+            query = query.replace("Action in (drop, reject)", "Action in ('drop', 'reject')")
+            query = query.replace("stats count(*)", "stats count")
+            return query
     
     def _execute_query_fallback(self, original_query, max_count):
         """Fallback query execution without time filtering"""

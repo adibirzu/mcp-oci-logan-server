@@ -262,18 +262,37 @@ class OCILoganMCPServer {
   private async healthCheck(args: Record<string, unknown>): Promise<ToolResult> {
     const { detail = false } = args as { detail?: boolean };
     const transportEnv = (process.env.MCP_TRANSPORT || 'stdio').toLowerCase();
+
+    // Always verify Python dependencies for accurate health status
+    const dependencyCheck = await this.logAnalyticsClient.verifyPythonDependencies();
+
+    const overallStatus = dependencyCheck.success ? 'ok' : 'degraded';
+
     const info: Record<string, unknown> = {
-      status: 'ok',
+      status: overallStatus,
       server: 'oci_logan_mcp',
       version: SERVER_VERSION,
       transport: transportEnv,
       region: DEFAULT_REGION,
-      defaultCompartment: DEFAULT_COMPARTMENT_ID || "unset"
+      defaultCompartment: DEFAULT_COMPARTMENT_ID || "unset",
+      dependencies: {
+        python: dependencyCheck.pythonAvailable,
+        ociSdk: dependencyCheck.ociSdkAvailable,
+        queryValidator: dependencyCheck.queryValidatorAvailable
+      }
     };
+
     if (detail) {
       info.timestamp = new Date().toISOString();
       info.nodeVersion = process.version;
+      info.pythonVersion = dependencyCheck.pythonVersion;
+      info.ociSdkVersion = dependencyCheck.ociSdkVersion;
+      info.dependencyDetails = dependencyCheck.details;
+      if (dependencyCheck.errors.length > 0) {
+        info.dependencyErrors = dependencyCheck.errors;
+      }
     }
+
     return this.formatResponse('Health', info, 'json');
   }
 

@@ -481,40 +481,21 @@ export class LogAnalyticsClient {
             queryLower.includes('datetime >');
     }
     /**
-     * Fix common OCI Logging Analytics query syntax issues
-     * This mirrors the _fix_query_syntax method from logan_client.py
+     * Pass-through for query syntax - all transformations handled by Python layer
+     *
+     * Previously this method duplicated the _fix_query_syntax logic from logan_client.py.
+     * Query transformation is now consolidated in Python to avoid duplication and
+     * ensure single source of truth for OCI-specific syntax rules.
+     *
+     * @see python/logan_client.py _fix_query_syntax() for the actual transformations
      */
     fixQuerySyntax(query) {
-        let fixedQuery = query;
-        // Fix != null syntax to proper OCI syntax
-        fixedQuery = fixedQuery.replace(/!= null/g, '!= ""').replace(/is not null/g, '!= ""');
-        // Fix MITRE technique field syntax - ensure Technique_id is handled correctly
-        fixedQuery = fixedQuery.replace(/'Technique_id'/g, 'Technique_id');
-        // Fix Action field syntax
-        fixedQuery = fixedQuery.replace(/Action in \(drop, reject\)/g, "Action in ('drop', 'reject')");
-        // Fix count(*) to count() - OCI doesn't support count(*)
-        fixedQuery = fixedQuery.replace(/stats count\(\*\)/g, "stats count");
-        // Fix count(field) syntax issues
-        const countFieldPattern = /stats count\(['"]?([^')]+)['"]?\)/g;
-        if (countFieldPattern.test(fixedQuery)) {
-            // For WAF and other specific log sources, use count() without field
-            if (fixedQuery.includes('WAF') || fixedQuery.includes('Suricata')) {
-                fixedQuery = fixedQuery.replace(countFieldPattern, "stats count");
-            }
-            else {
-                fixedQuery = fixedQuery.replace(countFieldPattern, "stats count");
-            }
-        }
-        // Fix top command syntax
-        fixedQuery = fixedQuery.replace(/\| top 10 Count/g, "| sort -Count | head 10");
-        // Remove problematic lookup commands (but preserve WAF lookups)
-        if (fixedQuery.includes('| lookup') && !fixedQuery.includes('WAF') && !fixedQuery.includes('Suricata')) {
-            const lookupPos = fixedQuery.indexOf('| lookup');
-            if (lookupPos > 0) {
-                fixedQuery = fixedQuery.substring(0, lookupPos).trim();
-            }
-        }
-        return fixedQuery;
+        // All query syntax transformation is now handled by Python's _fix_query_syntax()
+        // in logan_client.py. This ensures:
+        // 1. Single source of truth for OCI query syntax rules
+        // 2. No duplication of transformation logic
+        // 3. Easier maintenance when OCI syntax requirements change
+        return query;
     }
     /**
      * Parse time range string to minutes
@@ -603,6 +584,148 @@ export class LogAnalyticsClient {
                 region: 'Unknown',
                 compartmentId: 'Unknown',
                 details: `Connection failed: ${error instanceof Error ? error.message : String(error)}`
+            };
+        }
+    }
+    /**
+     * Verify Python dependencies are available and importable.
+     * This performs actual import tests rather than just checking file existence.
+     */
+    async verifyPythonDependencies() {
+        const errors = [];
+        let pythonAvailable = false;
+        let ociSdkAvailable = false;
+        let queryValidatorAvailable = false;
+        let pythonVersion;
+        let ociSdkVersion;
+        try {
+            const environment = this.getPythonEnvironment();
+            // Check if Python executable exists
+            if (!fsSync.existsSync(environment.pythonExecutable)) {
+                errors.push(`Python executable not found at ${environment.pythonExecutable}`);
+                return {
+                    success: false,
+                    pythonAvailable: false,
+                    ociSdkAvailable: false,
+                    queryValidatorAvailable: false,
+                    errors,
+                    details: 'Python environment not set up. Run setup-python.sh to configure.'
+                };
+            }
+            // Run a Python script to verify imports
+            const checkScript = `
+import sys
+import json
+result = {
+    "python_version": sys.version.split()[0],
+    "oci_sdk_available": False,
+    "oci_sdk_version": None,
+    "query_validator_available": False,
+    "errors": []
+}
+
+try:
+    import oci
+    result["oci_sdk_available"] = True
+    result["oci_sdk_version"] = getattr(oci, "__version__", "unknown")
+except ImportError as e:
+    result["errors"].append(f"OCI SDK import failed: {str(e)}")
+
+try:
+    from query_validator import QueryValidator
+    result["query_validator_available"] = True
+except ImportError as e:
+    result["errors"].append(f"QueryValidator import failed: {str(e)}")
+
+print(json.dumps(result))
+`;
+            return await new Promise((resolve) => {
+                const pythonProcess = spawn(environment.pythonExecutable, ['-c', checkScript], {
+                    stdio: ['pipe', 'pipe', 'pipe'],
+                    cwd: environment.workingDirectory,
+                    timeout: 10000 // 10 second timeout
+                });
+                let stdout = '';
+                let stderr = '';
+                pythonProcess.stdout.on('data', (data) => {
+                    stdout += data.toString();
+                });
+                pythonProcess.stderr.on('data', (data) => {
+                    stderr += data.toString();
+                });
+                pythonProcess.on('close', (code) => {
+                    pythonAvailable = true;
+                    if (code === 0 && stdout.trim()) {
+                        try {
+                            const result = JSON.parse(stdout.trim());
+                            pythonVersion = result.python_version;
+                            ociSdkAvailable = result.oci_sdk_available;
+                            ociSdkVersion = result.oci_sdk_version;
+                            queryValidatorAvailable = result.query_validator_available;
+                            errors.push(...(result.errors || []));
+                            const allGood = ociSdkAvailable && queryValidatorAvailable;
+                            resolve({
+                                success: allGood,
+                                pythonAvailable: true,
+                                ociSdkAvailable,
+                                ociSdkVersion,
+                                queryValidatorAvailable,
+                                pythonVersion,
+                                errors,
+                                details: allGood
+                                    ? `Python ${pythonVersion} with OCI SDK ${ociSdkVersion} ready`
+                                    : `Python ${pythonVersion} available but some dependencies missing`
+                            });
+                        }
+                        catch (parseError) {
+                            errors.push(`Failed to parse dependency check output: ${parseError}`);
+                            resolve({
+                                success: false,
+                                pythonAvailable: true,
+                                ociSdkAvailable: false,
+                                queryValidatorAvailable: false,
+                                pythonVersion: undefined,
+                                errors,
+                                details: 'Dependency check failed to parse results'
+                            });
+                        }
+                    }
+                    else {
+                        errors.push(`Python check failed with code ${code}: ${stderr}`);
+                        resolve({
+                            success: false,
+                            pythonAvailable: true,
+                            ociSdkAvailable: false,
+                            queryValidatorAvailable: false,
+                            errors,
+                            details: `Python available but dependency check failed: ${stderr}`
+                        });
+                    }
+                });
+                pythonProcess.on('error', (error) => {
+                    errors.push(`Failed to spawn Python process: ${error.message}`);
+                    resolve({
+                        success: false,
+                        pythonAvailable: false,
+                        ociSdkAvailable: false,
+                        queryValidatorAvailable: false,
+                        errors,
+                        details: `Failed to run Python: ${error.message}`
+                    });
+                });
+            });
+        }
+        catch (error) {
+            errors.push(error instanceof Error ? error.message : String(error));
+            return {
+                success: false,
+                pythonAvailable,
+                ociSdkAvailable,
+                queryValidatorAvailable,
+                pythonVersion,
+                ociSdkVersion,
+                errors,
+                details: `Dependency verification failed: ${errors.join(', ')}`
             };
         }
     }

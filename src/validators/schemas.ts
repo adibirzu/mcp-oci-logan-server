@@ -241,6 +241,24 @@ export const CheckOCIConnectionSchema = z.object({
 }).strict();
 
 /**
+ * usage_guide input schema
+ */
+export const UsageGuideSchema = z.object({
+  format: z.enum(['markdown', 'json'])
+    .default('markdown')
+    .describe('Response format')
+}).strict();
+
+/**
+ * health_check input schema
+ */
+export const HealthCheckSchema = z.object({
+  detail: z.boolean()
+    .default(false)
+    .describe('Return extended detail if true')
+}).strict();
+
+/**
  * list_dashboards input schema
  */
 export const ListDashboardsSchema = z.object({
@@ -650,7 +668,9 @@ export const ToolSchemas: Record<string, z.ZodObject<z.ZodRawShape>> = {
   'oci_logan_get_queries': GetLoganQueriesSchema,
   'oci_logan_validate_query': ValidateQuerySchema,
   'oci_logan_get_documentation': GetDocumentationSchema,
+  'oci_logan_usage_guide': UsageGuideSchema,
   'oci_logan_check_connection': CheckOCIConnectionSchema,
+  'oci_logan_health': HealthCheckSchema,
   'oci_logan_list_dashboards': ListDashboardsSchema,
   'oci_logan_get_dashboard': GetDashboardSchema,
   'oci_logan_get_dashboard_tiles': GetDashboardTilesSchema,

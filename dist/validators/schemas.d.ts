@@ -190,6 +190,26 @@ export declare const CheckOCIConnectionSchema: z.ZodObject<{
     testQuery?: boolean;
 }>;
 /**
+ * usage_guide input schema
+ */
+export declare const UsageGuideSchema: z.ZodObject<{
+    format: z.ZodDefault<z.ZodEnum<["markdown", "json"]>>;
+}, "strict", z.ZodTypeAny, {
+    format?: "markdown" | "json";
+}, {
+    format?: "markdown" | "json";
+}>;
+/**
+ * health_check input schema
+ */
+export declare const HealthCheckSchema: z.ZodObject<{
+    detail: z.ZodDefault<z.ZodBoolean>;
+}, "strict", z.ZodTypeAny, {
+    detail?: boolean;
+}, {
+    detail?: boolean;
+}>;
+/**
  * list_dashboards input schema
  */
 export declare const ListDashboardsSchema: z.ZodObject<{

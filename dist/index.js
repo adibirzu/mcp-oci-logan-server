@@ -52,9 +52,8 @@ function loadEnvFile(filePath) {
         // best-effort
     }
 }
-// Load repo-local .env.local first so OCI/OTEL config is applied even when `npm start` runs `dist/index.js`.
+// Load repo-local .env.local so OCI/OTEL config is applied even when `npm start` runs `dist/index.js`.
 loadEnvFile(path.resolve(__dirname, '..', '.env.local'));
-loadEnvFile(path.resolve(__dirname, '..', '.env'));
 // Logger for this module
 const logger = createLogger('MCPServer');
 // Configuration constants
@@ -226,17 +225,31 @@ class OCILoganMCPServer {
     async healthCheck(args) {
         const { detail = false } = args;
         const transportEnv = (process.env.MCP_TRANSPORT || 'stdio').toLowerCase();
+        // Always verify Python dependencies for accurate health status
+        const dependencyCheck = await this.logAnalyticsClient.verifyPythonDependencies();
+        const overallStatus = dependencyCheck.success ? 'ok' : 'degraded';
         const info = {
-            status: 'ok',
+            status: overallStatus,
             server: 'oci_logan_mcp',
             version: SERVER_VERSION,
             transport: transportEnv,
             region: DEFAULT_REGION,
-            defaultCompartment: DEFAULT_COMPARTMENT_ID || "unset"
+            defaultCompartment: DEFAULT_COMPARTMENT_ID || "unset",
+            dependencies: {
+                python: dependencyCheck.pythonAvailable,
+                ociSdk: dependencyCheck.ociSdkAvailable,
+                queryValidator: dependencyCheck.queryValidatorAvailable
+            }
         };
         if (detail) {
             info.timestamp = new Date().toISOString();
             info.nodeVersion = process.version;
+            info.pythonVersion = dependencyCheck.pythonVersion;
+            info.ociSdkVersion = dependencyCheck.ociSdkVersion;
+            info.dependencyDetails = dependencyCheck.details;
+            if (dependencyCheck.errors.length > 0) {
+                info.dependencyErrors = dependencyCheck.errors;
+            }
         }
         return this.formatResponse('Health', info, 'json');
     }
@@ -247,12 +260,12 @@ class OCILoganMCPServer {
             transports: {
                 preferred: 'http',
                 fallback: 'stdio',
-                        env: {
-                            MCP_TRANSPORT: 'http|streamable-http|stdio',
-                            MCP_HTTP_HOST: 'default 0.0.0.0',
-                            MCP_HTTP_PORT: 'default 8000'
-                        }
-                    },
+                env: {
+                    MCP_TRANSPORT: 'http|streamable-http|stdio',
+                    MCP_HTTP_HOST: 'default 0.0.0.0',
+                    MCP_HTTP_PORT: 'default 8000'
+                }
+            },
             inputs: {
                 profile: 'use LOGAN_COMPARTMENT_ID / OCI_COMPARTMENT_ID and LOGAN_REGION / OCI_REGION',
                 defaults: 'agent should pass compartment/region when multi-tenant'

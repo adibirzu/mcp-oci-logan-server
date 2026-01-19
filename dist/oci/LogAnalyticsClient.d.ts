@@ -24,6 +24,16 @@ export interface ConnectionStatus {
     compartmentId: string;
     details: string;
 }
+export interface DependencyCheckResult {
+    success: boolean;
+    pythonAvailable: boolean;
+    ociSdkAvailable: boolean;
+    queryValidatorAvailable: boolean;
+    pythonVersion?: string;
+    ociSdkVersion?: string;
+    errors: string[];
+    details: string;
+}
 export declare class LogAnalyticsClient {
     private client;
     private provider;
@@ -72,8 +82,13 @@ export declare class LogAnalyticsClient {
      */
     private hasTimeFilter;
     /**
-     * Fix common OCI Logging Analytics query syntax issues
-     * This mirrors the _fix_query_syntax method from logan_client.py
+     * Pass-through for query syntax - all transformations handled by Python layer
+     *
+     * Previously this method duplicated the _fix_query_syntax logic from logan_client.py.
+     * Query transformation is now consolidated in Python to avoid duplication and
+     * ensure single source of truth for OCI-specific syntax rules.
+     *
+     * @see python/logan_client.py _fix_query_syntax() for the actual transformations
      */
     private fixQuerySyntax;
     /**
@@ -82,6 +97,11 @@ export declare class LogAnalyticsClient {
     private parseTimeRange;
     private getNamespace;
     checkConnection(testQuery?: boolean): Promise<ConnectionStatus>;
+    /**
+     * Verify Python dependencies are available and importable.
+     * This performs actual import tests rather than just checking file existence.
+     */
+    verifyPythonDependencies(): Promise<DependencyCheckResult>;
     getAvailableLogSources(): Promise<string[]>;
     getAvailableFields(logSource?: string): Promise<string[]>;
     listDashboards(request: {

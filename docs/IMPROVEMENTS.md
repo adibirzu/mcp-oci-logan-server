@@ -44,7 +44,7 @@ This query pattern only returned 1 source due to how OCI Logging Analytics proce
 
 ### 2. Fixed Hardcoded Path Issue
 
-**Problem:** The `QueryTransformer.ts` file had a hardcoded path to the Logan Security Dashboard project (`/Users/abirzu/dev/logan-security-dashboard`) that wouldn't work on other systems.
+**Problem:** The `QueryTransformer.ts` file had a hardcoded local path to the Logan Security Dashboard project (`<LOGAN_SECURITY_DASHBOARD_PATH>`) that wouldn't work on other systems.
 
 **Solution:**
 - Added environment variable support: `LOGAN_PROJECT_PATH`

@@ -26,7 +26,7 @@ All real OCIDs and credentials have been removed from the GitHub project and rep
 - **`config/default.js`**: New configuration module with environment variable support
 
 #### Setup Scripts
-- **`setup.sh`**: Updated to read from .env file and use environment variables
+- **`setup.sh`**: Updated to read from .env.local file and use environment variables
 - **`setup-python.sh`**: Enhanced with better validation and security notes
 
 #### Documentation
@@ -40,9 +40,9 @@ All real OCIDs and credentials have been removed from the GitHub project and rep
 #### Enhanced .gitignore
 ```gitignore
 # Environment files - NEVER COMMIT CREDENTIALS
-.env
 .env.local
-*.env
+.env.local
+*.env.local
 !.env.template  # Template is safe
 
 # Claude Desktop configuration
@@ -57,7 +57,7 @@ auth_tokens
 ```
 
 #### Sensitive File Patterns Protected
-- All `*.env` files (except templates)
+- All `*.env.local` files (except templates)
 - OCI configuration files
 - Private keys and certificates
 - Wallet files
@@ -67,8 +67,8 @@ auth_tokens
 
 ### Before (Real OCIDs - Security Risk)
 ```
-ocid1.compartment.oc1..aaaaaaaagy3yddkkampnhj3cqm5ar7w2p7tuq5twbojyycvol6wugfav3ckq
-ocid1.compartment.oc1..aaaaaaaaghzlt3b6zl3nb7fsyh4nuiuzsuh4zzghfxmtfvvk4byylbvh56ba
+ocid1.compartment.oc1..<REDACTED>
+ocid1.compartment.oc1..<REDACTED>
 ```
 
 ### After (Safe Placeholders)
@@ -89,7 +89,7 @@ ocid1.savedsearch.oc1..sample1
 ## 🔧 Configuration Architecture
 
 ### Environment Variable Hierarchy
-1. **`.env` file** (highest priority, never committed)
+1. **`.env.local` file** (highest priority, never committed)
 2. **Shell environment variables** 
 3. **OCI CLI configuration** (`~/.oci/config`)
 4. **Instance Principal** (OCI compute only)
@@ -97,7 +97,7 @@ ocid1.savedsearch.oc1..sample1
 
 ### Example Configuration
 ```bash
-# .env file (created by user, never committed)
+# .env.local file (created by user, never committed)
 OCI_COMPARTMENT_ID=ocid1.compartment.oc1..aaaaaaaa[actual-id]
 OCI_REGION=eu-frankfurt-1
 
@@ -120,7 +120,7 @@ grep -r "fingerprint\|private.*key" . --exclude-dir=node_modules | grep -v "exam
 grep -r "process.env.OCI" src/
 
 # 4. Check .gitignore coverage
-git check-ignore .env claude_desktop_config.json
+git check-ignore .env.local claude_desktop_config.json
 ```
 
 ### Results
@@ -149,7 +149,7 @@ process.env.OCI_COMPARTMENT_ID
 ### ❌ Unsafe Patterns (Never Commit)
 ```javascript
 // Real OCIDs (40+ character strings)
-'ocid1.compartment.oc1..aaaaaaaagy3yddkkampnhj3cqm5ar7w2p7tuq5twbojyycvol6wugfav3ckq'
+'ocid1.compartment.oc1..<REDACTED>'
 
 // Real fingerprints
 'ab:cd:ef:12:34:56:78:90:ab:cd:ef:12:34:56:78:90'
@@ -162,10 +162,10 @@ process.env.OCI_COMPARTMENT_ID
 
 ### For New Users
 1. **Clone repository** (safe - no credentials)
-2. **Create `.env` from template**:
+2. **Create `.env.local` from template**:
    ```bash
-   cp .env.template .env
-   # Edit .env with actual values
+   cp .env.template .env.local
+   # Edit .env.local with actual values
    ```
 3. **Configure OCI CLI**:
    ```bash
@@ -203,7 +203,7 @@ process.env.OCI_COMPARTMENT_ID
 
 ### Developer Checklist
 - [ ] Use environment variables for all sensitive data
-- [ ] Never commit `.env` files
+- [ ] Never commit `.env.local` files
 - [ ] Use placeholder OCIDs in documentation
 - [ ] Test with environment variables before committing
 - [ ] Review git diff for credentials before pushing
