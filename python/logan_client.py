@@ -209,14 +209,15 @@ class LoganClient:
                 
                 query_details = oci.log_analytics.models.QueryDetails(
                     compartment_id=self.compartment_id,
+                    compartment_id_in_subtree=True,
                     query_string=query,
                     sub_system=oci.log_analytics.models.QueryDetails.SUB_SYSTEM_LOG,
                     max_total_count=max_count
                 )
-                
+
                 response = self.client.query(self.namespace, query_details)
                 result = self._format_response(response.data)
-                
+
                 # Ensure we never return mock data - validate this is real OCI response
                 if result and result.get("success") and "results" in result:
                     # Add metadata to confirm this is real OCI data
@@ -242,20 +243,21 @@ class LoganClient:
             try:
                 query_details = oci.log_analytics.models.QueryDetails(
                     compartment_id=self.compartment_id,
+                    compartment_id_in_subtree=True,
                     query_string=query,
                     sub_system=oci.log_analytics.models.QueryDetails.SUB_SYSTEM_LOG,
                     max_total_count=max_count
                 )
-                
+
                 response = self.client.query(self.namespace, query_details)
                 result = self._format_response(response.data)
-                
+
                 # Add timing information
                 result["query_used"] = query
                 result["time_period_minutes"] = time_period_minutes
-                
+
                 return result
-                
+
             except oci.exceptions.ServiceError as e:
                 sys.stderr.write(f"OCI Service Error during query execution: Code={e.code}, Message={e.message}, Headers={e.headers}\n")
                 return {"error": f"OCI Service Error: {e.message}", "success": False}
@@ -319,14 +321,15 @@ class LoganClient:
             
             query_details = oci.log_analytics.models.QueryDetails(
                 compartment_id=self.compartment_id,
+                compartment_id_in_subtree=True,
                 query_string=query,
                 sub_system=oci.log_analytics.models.QueryDetails.SUB_SYSTEM_LOG,
                 max_total_count=max_count
             )
-            
+
             response = self.client.query(self.namespace, query_details)
             result = self._format_response(response.data)
-            
+
             result["query_used"] = query
             result["fallback_used"] = True
             

@@ -157,3 +157,11 @@ export type ParserType = typeof PARSER_TYPES[number];
 // Tile types
 export const TILE_TYPES = ['all', 'query', 'visualization', 'metric', 'text'] as const;
 export type TileType = typeof TILE_TYPES[number];
+
+// Re-export detection types for convenience
+export {
+  DETECTION_LEVELS, PLATFORMS, HUNTING_TYPES, COOKBOOK_METHODS,
+  type DetectionLevel, type Platform, type HuntingType, type CookbookMethod,
+  type DetectionRule, type HuntingQuery, type DetectionFilter, type CompactRule,
+  type CatalogSummary,
+} from '../detections/types.js';

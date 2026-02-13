@@ -1154,6 +1154,124 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
         }
       }
     }
+  },
+  // Detection Catalog Tools
+  {
+    name: 'oci_logan_run_detection',
+    description: 'Execute a detection rule by ID from the embedded catalog. Pass a rule ID (from search_detections or detection://rules/summary) to run a pre-tested query. Much more efficient than constructing queries manually.',
+    annotations: { ...READ_ONLY, title: 'Run Detection Rule' },
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ruleId: {
+          type: 'string',
+          description: 'Detection rule ID (e.g., "linux_dns_tunneling_detected", "oci_console_login_failure"). Get IDs from oci_logan_search_detections or detection://rules/summary resource.'
+        },
+        timeRange: {
+          type: 'string',
+          description: 'Time range for the query (default 24h, use 7d+ for hunting)',
+          enum: ['1h', '6h', '12h', '24h', '1d', '7d', '30d', '1w', '1m', '90d'],
+          default: '24h'
+        },
+        compartmentId: {
+          type: 'string',
+          description: 'OCI compartment OCID (uses default if not provided)'
+        },
+        format: {
+          type: 'string',
+          enum: ['markdown', 'json'],
+          default: 'markdown'
+        }
+      },
+      required: ['ruleId']
+    }
+  },
+  {
+    name: 'oci_logan_run_hunting_query',
+    description: 'Execute a hunting query by ID from the embedded catalog. Hunting queries use advanced analytics (frequency analysis, rare value stacking, anomaly scoring). Use 7d+ time ranges for best results.',
+    annotations: { ...READ_ONLY, title: 'Run Hunting Query' },
+    inputSchema: {
+      type: 'object',
+      properties: {
+        queryId: {
+          type: 'string',
+          description: 'Hunting query ID (e.g., "ssh_brute_force_frequency", "oci_console_brute_force"). Get IDs from detection://hunting/summary resource.'
+        },
+        timeRange: {
+          type: 'string',
+          description: 'Time range (7d+ recommended for hunting analytics)',
+          enum: ['1h', '6h', '12h', '24h', '1d', '7d', '30d', '1w', '1m', '90d'],
+          default: '7d'
+        },
+        compartmentId: {
+          type: 'string',
+          description: 'OCI compartment OCID (uses default if not provided)'
+        },
+        format: {
+          type: 'string',
+          enum: ['markdown', 'json'],
+          default: 'markdown'
+        }
+      },
+      required: ['queryId']
+    }
+  },
+  {
+    name: 'oci_logan_search_detections',
+    description: 'Search the embedded detection catalog by platform, severity, MITRE technique/tactic, or keyword. Returns compact results (id, title, level, platform) — use IDs with oci_logan_run_detection.',
+    annotations: { ...READ_ONLY, title: 'Search Detection Catalog' },
+    inputSchema: {
+      type: 'object',
+      properties: {
+        platform: {
+          type: 'string',
+          description: 'Filter by platform',
+          enum: ['oci', 'linux', 'windows']
+        },
+        level: {
+          type: 'string',
+          description: 'Filter by severity',
+          enum: ['critical', 'high', 'medium', 'low', 'informational']
+        },
+        mitreTechnique: {
+          type: 'string',
+          description: 'MITRE technique ID (e.g., T1078, T1110.001)'
+        },
+        mitreTactic: {
+          type: 'string',
+          description: 'MITRE tactic name (e.g., initial_access, persistence, lateral_movement)'
+        },
+        stigCategory: {
+          type: 'string',
+          description: 'STIG category filter',
+          enum: ['CAT I', 'CAT II', 'CAT III']
+        },
+        keyword: {
+          type: 'string',
+          description: 'Keyword search in rule title/description'
+        },
+        format: {
+          type: 'string',
+          enum: ['markdown', 'json'],
+          default: 'markdown'
+        }
+      }
+    }
+  },
+  {
+    name: 'oci_logan_detection_stats',
+    description: 'Get detection catalog statistics: rule counts by platform/severity, MITRE coverage, STIG controls. Zero API cost — reads from embedded catalog.',
+    annotations: { ...READ_ONLY, title: 'Detection Catalog Stats' },
+    inputSchema: {
+      type: 'object',
+      properties: {
+        format: {
+          type: 'string',
+          enum: ['markdown', 'json'],
+          default: 'markdown'
+        }
+      }
+    }
   }
 ];
 
@@ -1206,7 +1324,11 @@ export const TOOL_NAME_MAPPING: Record<string, string> = {
   'get_storage_usage': 'oci_logan_get_storage_usage',
   'list_parsers': 'oci_logan_list_parsers',
   'list_labels': 'oci_logan_list_labels',
-  'query_recent_uploads': 'oci_logan_query_recent_uploads'
+  'query_recent_uploads': 'oci_logan_query_recent_uploads',
+  'run_detection': 'oci_logan_run_detection',
+  'run_hunting_query': 'oci_logan_run_hunting_query',
+  'search_detections': 'oci_logan_search_detections',
+  'detection_stats': 'oci_logan_detection_stats'
 };
 
 /**

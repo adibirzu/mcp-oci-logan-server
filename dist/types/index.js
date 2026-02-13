@@ -44,3 +44,5 @@ export const ENTITY_TYPES = ['HOST', 'DATABASE', 'APPLICATION', 'WEBSERVER', 'CO
 export const PARSER_TYPES = ['REGEX', 'XML', 'JSON', 'DELIMITED', 'all'];
 // Tile types
 export const TILE_TYPES = ['all', 'query', 'visualization', 'metric', 'text'];
+// Re-export detection types for convenience
+export { DETECTION_LEVELS, PLATFORMS, HUNTING_TYPES, COOKBOOK_METHODS, } from '../detections/types.js';

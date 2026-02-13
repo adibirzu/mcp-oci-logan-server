@@ -3,7 +3,7 @@
  * Following MCP best practices for input validation
  */
 import { z } from 'zod';
-import { TIME_RANGES, ANALYSIS_TYPES, EVENT_TYPES, MITRE_CATEGORIES, QUERY_CATEGORIES, DOC_TOPICS, LIFECYCLE_STATES, WIDGET_TYPES, SAVED_SEARCH_TYPES, ANALYTICS_TYPES, STAT_OPERATIONS, FIELD_OPERATIONS, CORRELATION_TYPES, ENTITY_TYPES, PARSER_TYPES, TILE_TYPES } from '../types/index.js';
+import { TIME_RANGES, ANALYSIS_TYPES, EVENT_TYPES, MITRE_CATEGORIES, QUERY_CATEGORIES, DOC_TOPICS, LIFECYCLE_STATES, WIDGET_TYPES, SAVED_SEARCH_TYPES, ANALYTICS_TYPES, STAT_OPERATIONS, FIELD_OPERATIONS, CORRELATION_TYPES, ENTITY_TYPES, PARSER_TYPES, TILE_TYPES, DETECTION_LEVELS, PLATFORMS } from '../types/index.js';
 // ============================================
 // Common Schemas
 // ============================================
@@ -582,6 +582,65 @@ export const QueryRecentUploadsSchema = z.object({
     format: ResponseFormatSchema
 }).strict();
 // ============================================
+// Detection Catalog Schemas
+// ============================================
+/**
+ * run_detection input schema
+ */
+export const RunDetectionSchema = z.object({
+    ruleId: z.string()
+        .min(1, 'Rule ID cannot be empty')
+        .max(255, 'Rule ID exceeds maximum length')
+        .describe('Detection rule ID from the embedded catalog'),
+    timeRange: TimeRangeSchema,
+    compartmentId: CompartmentIdSchema,
+    format: ResponseFormatSchema
+}).strict();
+/**
+ * run_hunting_query input schema
+ */
+export const RunHuntingQuerySchema = z.object({
+    queryId: z.string()
+        .min(1, 'Query ID cannot be empty')
+        .max(255, 'Query ID exceeds maximum length')
+        .describe('Hunting query ID from the embedded catalog'),
+    timeRange: z.enum(TIME_RANGES)
+        .default('7d')
+        .describe('Time range (7d+ recommended for hunting)'),
+    compartmentId: CompartmentIdSchema,
+    format: ResponseFormatSchema
+}).strict();
+/**
+ * search_detections input schema
+ */
+export const SearchDetectionsSchema = z.object({
+    platform: z.enum(PLATFORMS).optional()
+        .describe('Filter by platform'),
+    level: z.enum(DETECTION_LEVELS).optional()
+        .describe('Filter by severity level'),
+    mitreTechnique: z.string()
+        .regex(/^T\d{4}(\.\d{3})?$/i, 'Invalid MITRE technique ID format (e.g., T1078, T1110.001)')
+        .optional()
+        .describe('MITRE ATT&CK technique ID'),
+    mitreTactic: z.string()
+        .max(50)
+        .optional()
+        .describe('MITRE ATT&CK tactic name'),
+    stigCategory: z.enum(['CAT I', 'CAT II', 'CAT III']).optional()
+        .describe('STIG category filter'),
+    keyword: z.string()
+        .max(200)
+        .optional()
+        .describe('Keyword search in rule title/description'),
+    format: ResponseFormatSchema
+}).strict();
+/**
+ * detection_stats input schema
+ */
+export const DetectionStatsSchema = z.object({
+    format: ResponseFormatSchema
+}).strict();
+// ============================================
 // Schema Registry
 // ============================================
 /**
@@ -622,7 +681,11 @@ export const ToolSchemas = {
     'oci_logan_get_storage_usage': GetStorageUsageSchema,
     'oci_logan_list_parsers': ListParsersSchema,
     'oci_logan_list_labels': ListLabelsSchema,
-    'oci_logan_query_recent_uploads': QueryRecentUploadsSchema
+    'oci_logan_query_recent_uploads': QueryRecentUploadsSchema,
+    'oci_logan_run_detection': RunDetectionSchema,
+    'oci_logan_run_hunting_query': RunHuntingQuerySchema,
+    'oci_logan_search_detections': SearchDetectionsSchema,
+    'oci_logan_detection_stats': DetectionStatsSchema
 };
 /**
  * Validate tool input against schema

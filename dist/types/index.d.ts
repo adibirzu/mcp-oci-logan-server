@@ -90,3 +90,4 @@ export declare const PARSER_TYPES: readonly ["REGEX", "XML", "JSON", "DELIMITED"
 export type ParserType = typeof PARSER_TYPES[number];
 export declare const TILE_TYPES: readonly ["all", "query", "visualization", "metric", "text"];
 export type TileType = typeof TILE_TYPES[number];
+export { DETECTION_LEVELS, PLATFORMS, HUNTING_TYPES, COOKBOOK_METHODS, type DetectionLevel, type Platform, type HuntingType, type CookbookMethod, type DetectionRule, type HuntingQuery, type DetectionFilter, type CompactRule, type CatalogSummary, } from '../detections/types.js';

@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "oci-logan": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--directory",
+        "/Users/abirzu/dev/mcp-oci-logan-server",
+        "mcp-oci-logan"
+      ],
+      "env": {
+        "MCP_TRANSPORT": "stdio",
+        "OCI_REGION": "eu-frankfurt-1",
+        "DETECTION_RULES_PATH": "/Users/abirzu/dev/oci-log-analytics-detections/queries"
+      }
+    }
+  }
+}

@@ -26,6 +26,9 @@ import { handleError, MCPError, Errors } from './errors/index.js';
 import { getToolDefinitions, normalizeToolName, TOOL_NAME_MAPPING } from './tools/definitions.js';
 import { validateToolInput } from './validators/schemas.js';
 import { ToolResult, PaginatedResponse } from './types/index.js';
+import { DetectionCatalog } from './detections/detection-catalog.js';
+import { setupResourceHandlers } from './resources/index.js';
+import { setupPromptHandlers } from './prompts/index.js';
 import { spawn } from 'child_process';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -67,7 +70,7 @@ const DEFAULT_COMPARTMENT_ID = process.env.OCI_COMPARTMENT_ID;
 const DEFAULT_REGION = process.env.OCI_REGION || 'us-ashburn-1';
 
 // Server version - update with releases
-const SERVER_VERSION = '3.0.0';
+const SERVER_VERSION = '4.0.0';
 
 /**
  * OCI Logan MCP Server Class
@@ -79,6 +82,7 @@ class OCILoganMCPServer {
   private queryValidator: QueryValidator;
   private queryTransformer: QueryTransformer;
   private documentationLookup: DocumentationLookup;
+  private detectionCatalog: DetectionCatalog;
 
   constructor() {
     // Server name follows MCP convention: {service}_mcp
@@ -90,6 +94,8 @@ class OCILoganMCPServer {
       {
         capabilities: {
           tools: {},
+          resources: {},
+          prompts: {},
         },
       }
     );
@@ -98,8 +104,18 @@ class OCILoganMCPServer {
     this.queryValidator = new QueryValidator();
     this.queryTransformer = new QueryTransformer();
     this.documentationLookup = new DocumentationLookup();
+    this.detectionCatalog = new DetectionCatalog();
+
+    // Initialize detection catalog (async, non-blocking)
+    this.detectionCatalog.initialize().catch(err => {
+      logger.error('Detection catalog initialization failed', {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    });
 
     this.setupToolHandlers();
+    setupResourceHandlers(this.server, this.detectionCatalog);
+    setupPromptHandlers(this.server);
 
     // Error handling
     this.server.onerror = (error) => {
@@ -250,6 +266,16 @@ class OCILoganMCPServer {
       case 'oci_logan_query_recent_uploads':
         return await this.queryRecentUploads(typedArgs);
 
+      // Detection Catalog Tools
+      case 'oci_logan_run_detection':
+        return await this.runDetection(typedArgs);
+      case 'oci_logan_run_hunting_query':
+        return await this.runHuntingQuery(typedArgs);
+      case 'oci_logan_search_detections':
+        return await this.searchDetections(typedArgs);
+      case 'oci_logan_detection_stats':
+        return await this.detectionStats(typedArgs);
+
       default:
         throw Errors.notFound('Tool', name);
     }
@@ -268,6 +294,8 @@ class OCILoganMCPServer {
 
     const overallStatus = dependencyCheck.success ? 'ok' : 'degraded';
 
+    const catalogSummary = this.detectionCatalog.getSummary();
+
     const info: Record<string, unknown> = {
       status: overallStatus,
       server: 'oci_logan_mcp',
@@ -275,10 +303,17 @@ class OCILoganMCPServer {
       transport: transportEnv,
       region: DEFAULT_REGION,
       defaultCompartment: DEFAULT_COMPARTMENT_ID || "unset",
+      capabilities: ['tools', 'resources', 'prompts'],
       dependencies: {
         python: dependencyCheck.pythonAvailable,
         ociSdk: dependencyCheck.ociSdkAvailable,
         queryValidator: dependencyCheck.queryValidatorAvailable
+      },
+      detectionCatalog: {
+        loaded: catalogSummary.loaded,
+        rules: catalogSummary.totalRules,
+        hunting: catalogSummary.totalHunting,
+        platforms: catalogSummary.platforms
       }
     };
 
@@ -299,7 +334,7 @@ class OCILoganMCPServer {
   private async usageGuide(args: Record<string, unknown>): Promise<ToolResult> {
     const { format = 'markdown' } = args as { format?: string };
     const guide = {
-      summary: 'OCI Logan MCP usage guide',
+      summary: 'OCI Logan MCP v4 usage guide — tools + resources + prompts',
       transports: {
         preferred: 'http',
         fallback: 'stdio',
@@ -313,9 +348,26 @@ class OCILoganMCPServer {
         profile: 'use LOGAN_COMPARTMENT_ID / OCI_COMPARTMENT_ID and LOGAN_REGION / OCI_REGION',
         defaults: 'agent should pass compartment/region when multi-tenant'
       },
+      detectionWorkflow: {
+        step1: 'Browse: read detection://rules/summary or use oci_logan_search_detections',
+        step2: 'Inspect: read detection://rules/{ruleId} for full details',
+        step3: 'Execute: use oci_logan_run_detection with the rule ID',
+        step4: 'Hunt: use oci_logan_run_hunting_query for advanced analytics',
+        tip: 'Always use detection IDs instead of constructing raw OCL queries'
+      },
+      prompts: [
+        'security-triage — triage alerts across platforms',
+        'threat-hunt — hypothesis-driven hunting session',
+        'incident-investigation — IOC evidence collection',
+        'compliance-check — STIG/DoD compliance report',
+        'detection-coverage-gap — MITRE ATT&CK gap analysis',
+        'daily-security-brief — daily SOC summary'
+      ],
       bestPractices: [
+        'Prefer detection-by-ID over raw OCL queries for lower token usage',
         'Use cache-first where available; prefer concise queries',
         'Limit time ranges to reduce cost; default 24h unless specified',
+        'Use 7d+ time ranges for hunting queries',
         'Return markdown for chat UIs, json for programmatic use'
       ],
       references: [
@@ -1832,6 +1884,181 @@ class OCILoganMCPServer {
   }
 
   // ============================================
+  // Detection Catalog Tools
+  // ============================================
+
+  private async runDetection(args: Record<string, unknown>): Promise<ToolResult> {
+    const {
+      ruleId,
+      timeRange = '24h',
+      compartmentId: providedCompartmentId,
+      format = 'markdown'
+    } = args as {
+      ruleId: string;
+      timeRange?: string;
+      compartmentId?: string;
+      format?: string;
+    };
+
+    const rule = this.detectionCatalog.getRule(ruleId);
+    if (!rule) {
+      throw Errors.notFound('Detection rule', ruleId);
+    }
+
+    // Inject time filter if the query doesn't already have one
+    let query = rule.query;
+    if (!query.includes('Time >') && !query.includes('Time >=') && !query.includes('dateRelative')) {
+      const timeFilter = this.buildTimeFilter(timeRange);
+      // Insert time filter after the log source clause
+      const pipeIndex = query.indexOf('|');
+      if (pipeIndex > 0) {
+        query = `${query.substring(0, pipeIndex).trim()} ${timeFilter} ${query.substring(pipeIndex)}`;
+      } else {
+        query = `${query} ${timeFilter}`;
+      }
+    }
+
+    const compartmentId = providedCompartmentId || DEFAULT_COMPARTMENT_ID;
+
+    logger.debug('Running detection rule', { ruleId, title: rule.title, timeRange });
+
+    const results = await this.logAnalyticsClient.executeQuery({
+      query,
+      timeRange,
+      compartmentId,
+    });
+
+    if (!results.success) {
+      throw Errors.ociError(results.error || `Detection query failed: ${ruleId}`);
+    }
+
+    const timeRangeMinutes = this.parseTimeRange(timeRange);
+
+    return this.formatResponse('Detection Rule Results', {
+      ruleId,
+      title: rule.title,
+      level: rule.level,
+      description: rule.description,
+      mitre: rule.mitre_attack,
+      dataPeriod: this.getTimeDescription(timeRangeMinutes),
+      totalRecords: results.totalCount,
+      executionTime: `${results.executionTime}ms`,
+      falsepositives: rule.falsepositives,
+      _results: results.data.slice(0, 50)
+    }, format);
+  }
+
+  private async runHuntingQuery(args: Record<string, unknown>): Promise<ToolResult> {
+    const {
+      queryId,
+      timeRange = '7d',
+      compartmentId: providedCompartmentId,
+      format = 'markdown'
+    } = args as {
+      queryId: string;
+      timeRange?: string;
+      compartmentId?: string;
+      format?: string;
+    };
+
+    const huntingQuery = this.detectionCatalog.getHuntingQuery(queryId);
+    if (!huntingQuery) {
+      throw Errors.notFound('Hunting query', queryId);
+    }
+
+    // Inject time filter if needed
+    let query = huntingQuery.query;
+    if (!query.includes('Time >') && !query.includes('Time >=') && !query.includes('dateRelative')) {
+      const timeFilter = this.buildTimeFilter(timeRange);
+      const pipeIndex = query.indexOf('|');
+      if (pipeIndex > 0) {
+        query = `${query.substring(0, pipeIndex).trim()} ${timeFilter} ${query.substring(pipeIndex)}`;
+      } else {
+        query = `${query} ${timeFilter}`;
+      }
+    }
+
+    const compartmentId = providedCompartmentId || DEFAULT_COMPARTMENT_ID;
+
+    logger.debug('Running hunting query', { queryId, title: huntingQuery.title, timeRange });
+
+    const results = await this.logAnalyticsClient.executeQuery({
+      query,
+      timeRange,
+      compartmentId,
+    });
+
+    if (!results.success) {
+      throw Errors.ociError(results.error || `Hunting query failed: ${queryId}`);
+    }
+
+    const timeRangeMinutes = this.parseTimeRange(timeRange);
+
+    return this.formatResponse('Hunting Query Results', {
+      queryId,
+      title: huntingQuery.title,
+      huntingType: huntingQuery.hunting_type,
+      cookbookMethod: huntingQuery.cookbook_method,
+      level: huntingQuery.level,
+      description: huntingQuery.description,
+      mitre: huntingQuery.mitre_attack,
+      dataPeriod: this.getTimeDescription(timeRangeMinutes),
+      totalRecords: results.totalCount,
+      executionTime: `${results.executionTime}ms`,
+      _results: results.data.slice(0, 50)
+    }, format);
+  }
+
+  private async searchDetections(args: Record<string, unknown>): Promise<ToolResult> {
+    const {
+      platform,
+      level,
+      mitreTechnique,
+      mitreTactic,
+      stigCategory,
+      keyword,
+      format = 'markdown'
+    } = args as {
+      platform?: string;
+      level?: string;
+      mitreTechnique?: string;
+      mitreTactic?: string;
+      stigCategory?: string;
+      keyword?: string;
+      format?: string;
+    };
+
+    const results = this.detectionCatalog.searchRules({
+      platform: platform as import('./detections/types.js').Platform | undefined,
+      level: level as import('./detections/types.js').DetectionLevel | undefined,
+      mitreTechnique: mitreTechnique?.toUpperCase(),
+      mitreTactic,
+      stigCategory,
+      keyword,
+    });
+
+    return this.formatResponse('Detection Search Results', {
+      filters: {
+        ...(platform && { platform }),
+        ...(level && { level }),
+        ...(mitreTechnique && { mitreTechnique }),
+        ...(mitreTactic && { mitreTactic }),
+        ...(stigCategory && { stigCategory }),
+        ...(keyword && { keyword }),
+      },
+      totalMatches: results.length,
+      hint: 'Use ruleId with oci_logan_run_detection to execute, or read detection://rules/{ruleId} for full details',
+      _results: results
+    }, format);
+  }
+
+  private async detectionStats(args: Record<string, unknown>): Promise<ToolResult> {
+    const { format = 'markdown' } = args as { format?: string };
+    const stats = this.detectionCatalog.getStats();
+    return this.formatResponse('Detection Catalog Statistics', stats, format);
+  }
+
+  // ============================================
   // Server Lifecycle
   // ============================================
 
@@ -1854,7 +2081,10 @@ class OCILoganMCPServer {
     // Default: stdio transport
     const transport = new StdioServerTransport();
     await this.server.connect(transport);
-    logger.info(`OCI Logan MCP Server v${SERVER_VERSION} running on stdio`);
+    const catalogStatus = this.detectionCatalog.isLoaded
+      ? `${this.detectionCatalog.ruleCount} detection rules loaded`
+      : 'detection catalog not available';
+    logger.info(`OCI Logan MCP Server v${SERVER_VERSION} running on stdio (tools+resources+prompts, ${catalogStatus})`);
   }
 }
 

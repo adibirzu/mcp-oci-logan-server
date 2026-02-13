@@ -895,6 +895,82 @@ export declare const QueryRecentUploadsSchema: z.ZodObject<{
     limit?: number;
 }>;
 /**
+ * run_detection input schema
+ */
+export declare const RunDetectionSchema: z.ZodObject<{
+    ruleId: z.ZodString;
+    timeRange: z.ZodDefault<z.ZodEnum<["1h", "6h", "12h", "24h", "1d", "7d", "30d", "1w", "1m", "90d"]>>;
+    compartmentId: z.ZodOptional<z.ZodString>;
+    format: z.ZodDefault<z.ZodEnum<["markdown", "json"]>>;
+}, "strict", z.ZodTypeAny, {
+    compartmentId?: string;
+    timeRange?: "24h" | "1h" | "6h" | "12h" | "1d" | "7d" | "30d" | "1w" | "1m" | "90d";
+    format?: "markdown" | "json";
+    ruleId?: string;
+}, {
+    compartmentId?: string;
+    timeRange?: "24h" | "1h" | "6h" | "12h" | "1d" | "7d" | "30d" | "1w" | "1m" | "90d";
+    format?: "markdown" | "json";
+    ruleId?: string;
+}>;
+/**
+ * run_hunting_query input schema
+ */
+export declare const RunHuntingQuerySchema: z.ZodObject<{
+    queryId: z.ZodString;
+    timeRange: z.ZodDefault<z.ZodEnum<["1h", "6h", "12h", "24h", "1d", "7d", "30d", "1w", "1m", "90d"]>>;
+    compartmentId: z.ZodOptional<z.ZodString>;
+    format: z.ZodDefault<z.ZodEnum<["markdown", "json"]>>;
+}, "strict", z.ZodTypeAny, {
+    queryId?: string;
+    compartmentId?: string;
+    timeRange?: "24h" | "1h" | "6h" | "12h" | "1d" | "7d" | "30d" | "1w" | "1m" | "90d";
+    format?: "markdown" | "json";
+}, {
+    queryId?: string;
+    compartmentId?: string;
+    timeRange?: "24h" | "1h" | "6h" | "12h" | "1d" | "7d" | "30d" | "1w" | "1m" | "90d";
+    format?: "markdown" | "json";
+}>;
+/**
+ * search_detections input schema
+ */
+export declare const SearchDetectionsSchema: z.ZodObject<{
+    platform: z.ZodOptional<z.ZodEnum<["oci", "linux", "windows"]>>;
+    level: z.ZodOptional<z.ZodEnum<["critical", "high", "medium", "low", "informational"]>>;
+    mitreTechnique: z.ZodOptional<z.ZodString>;
+    mitreTactic: z.ZodOptional<z.ZodString>;
+    stigCategory: z.ZodOptional<z.ZodEnum<["CAT I", "CAT II", "CAT III"]>>;
+    keyword: z.ZodOptional<z.ZodString>;
+    format: z.ZodDefault<z.ZodEnum<["markdown", "json"]>>;
+}, "strict", z.ZodTypeAny, {
+    format?: "markdown" | "json";
+    platform?: "linux" | "oci" | "windows";
+    level?: "critical" | "high" | "medium" | "low" | "informational";
+    mitreTechnique?: string;
+    mitreTactic?: string;
+    stigCategory?: "CAT I" | "CAT II" | "CAT III";
+    keyword?: string;
+}, {
+    format?: "markdown" | "json";
+    platform?: "linux" | "oci" | "windows";
+    level?: "critical" | "high" | "medium" | "low" | "informational";
+    mitreTechnique?: string;
+    mitreTactic?: string;
+    stigCategory?: "CAT I" | "CAT II" | "CAT III";
+    keyword?: string;
+}>;
+/**
+ * detection_stats input schema
+ */
+export declare const DetectionStatsSchema: z.ZodObject<{
+    format: z.ZodDefault<z.ZodEnum<["markdown", "json"]>>;
+}, "strict", z.ZodTypeAny, {
+    format?: "markdown" | "json";
+}, {
+    format?: "markdown" | "json";
+}>;
+/**
  * Map of tool names to their validation schemas
  */
 export declare const ToolSchemas: Record<string, z.ZodObject<z.ZodRawShape>>;
