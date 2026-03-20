@@ -173,15 +173,15 @@ dateRelative(now, -30d)
 | where hourOfDay < 6 or hourOfDay > 22
 ```
 
-## OCI Audit Log Fields
+## OCI Audit Log Fields (verified against live API)
 
 | Field | Description |
 |-------|-------------|
 | 'Event Type' | OCI API operation (e.g., com.oraclecloud.consolesignon.login) |
-| 'Request Action Type' | CRUD action (CreateInstance, DeleteBucket, etc.) |
-| Status | Success/Failure |
-| 'Principal Name' | User or service principal |
-| 'Client Host' | Source IP address |
+| 'User Name' | User or service principal (NOT 'Principal Name') |
+| Status | HTTP status code (200, 201, 400, etc.) — unquoted |
+| 'Source IP' | Source IP address (NOT 'Client Host') |
+| 'IP Address' | Alternative IP field |
 | 'Compartment Name' | OCI compartment |
 | 'Resource Name' | Affected resource |
 | 'Resource Type' | Resource type |
@@ -191,21 +191,57 @@ dateRelative(now, -30d)
 | Field | Description |
 |-------|-------------|
 | msg | Syslog message content |
-| 'Client Host' | Source IP |
+| 'Source IP' | Source IP |
 | User | Username |
-| Hostname | Host name |
+| 'Host Name' | Host name |
 | 'Process Name' | Process that generated the log |
 
-## Windows Sysmon Fields
+## Windows Sysmon Fields (verified against live API)
 
 | Field | Description |
 |-------|-------------|
-| 'Process Name' | Executable path |
-| 'Command Line' | Full command line |
-| 'Parent Process Name' | Parent process |
-| Computer | Host name |
-| 'Destination IP' | Network destination |
-| Technique_id | MITRE technique ID |
+| 'Process Name' | Executable path (NOT Image — unquoted is INVALID) |
+| 'Command Line' | Full command line (NOT CommandLine — unquoted is INVALID) |
+| 'User' | Account name |
+| 'User Name' | Account name (alternative) |
+| 'Host Name' | Computer/host name |
+| 'Destination IP' | Network destination (NOT DestinationIp) |
+| 'Source IP' | Source IP (NOT SourceIp) |
+| 'Query Name' | DNS query name for Event ID 22 (NOT QueryName) |
+| Technique_id | MITRE technique ID — unquoted |
+| 'Event ID' | Sysmon event type (1=process, 3=network, 11=file, 22=DNS) |
+
+## VCN Flow Log Fields (verified against live API)
+
+| Field | Description |
+|-------|-------------|
+| Action | accept / drop / reject — unquoted |
+| 'Source IP' | Source IP (MUST be quoted — SourceIP is INVALID) |
+| 'Source Port' | Source port (MUST be quoted) |
+| 'Destination IP' | Destination IP (MUST be quoted — DestinationIP is INVALID) |
+| 'Destination Port' | Destination port (MUST be quoted) |
+| 'Protocol Number' | Protocol number |
+
+## Cloud Guard Fields
+
+| Field | Description |
+|-------|-------------|
+| 'Problem Type' | Detection problem type |
+| 'Risk Level' | CRITICAL / HIGH / MEDIUM / LOW |
+| 'Resource Name' | Affected resource |
+| 'Resource Type' | Resource type |
+| 'Detector' | Detector rule name |
+| 'Recommendation' | Remediation recommendation |
+
+## IMPORTANT: Field Naming Rules (verified against live API 2026-03-19)
+
+1. **ALL fields with spaces MUST be single-quoted**: `'Source IP'` not `SourceIP`
+2. **Unquoted CamelCase is INVALID**: `SourceIP`, `CommandLine`, `QueryName` all return HTTP 400
+3. **Audit uses 'User Name'** — `'Principal Name'` and `'Client Host'` are INVALID
+4. **Sysmon uses 'Process Name'** — `Image` (unquoted) is INVALID
+5. **Sysmon uses 'Command Line'** — `CommandLine` (unquoted) is INVALID
+6. **Use `distinctcount()`** — `distinct_count()` is INVALID (no underscore)
+7. **Null checks**: Use `!= ""` not `!= null` or `is not null`
 """
 
 PLATFORMS = ("oci", "linux", "windows")

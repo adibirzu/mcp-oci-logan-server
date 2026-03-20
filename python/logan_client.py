@@ -45,8 +45,9 @@ class LoganClient:
     def _load_oci_config(self):
         """Load OCI configuration, allowing for environment variable overrides."""
         try:
-            # Attempt to load from default file, but allow overrides later
-            config = oci.config.from_file()
+            # Support OCI profile selection via OCI_CLI_PROFILE env var
+            profile_name = os.getenv('OCI_CLI_PROFILE', 'DEFAULT')
+            config = oci.config.from_file(profile_name=profile_name)
             # If region is explicitly set in env, override config
             if os.getenv('LOGAN_REGION'):
                 config['region'] = os.getenv('LOGAN_REGION')

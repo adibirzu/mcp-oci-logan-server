@@ -181,6 +181,23 @@ class QueryEngine:
     def _normalize_llm_query(self, query: str) -> str | None:
         lower = query.lower().strip()
 
+        # Guard: skip normalization if query looks like valid OCL syntax.
+        # Valid OCL uses patterns like: 'Field' = 'value', | stats, | sort, etc.
+        ocl_indicators = [
+            r"'log source'\s*=",
+            r"'[^']+'\s*=\s*'[^']+'",
+            r"\|\s*stats\b",
+            r"\|\s*sort\b",
+            r"\|\s*where\b",
+            r"\|\s*head\b",
+            r"\|\s*eval\b",
+            r"\|\s*rename\b",
+            r"\|\s*top\b",
+            r"\*\s*\|",
+        ]
+        if any(re.search(p, lower) for p in ocl_indicators):
+            return None
+
         # SQL-like patterns
         if re.search(r"\bselect\b", lower) or re.search(r"\bfrom\s+logs?\b", lower):
             for cfg in NL_QUERY_PATTERNS.values():
@@ -213,14 +230,15 @@ class QueryEngine:
             kw in q for kw in ("datetime", "time ", "timestamp", "daterelative", "timefilter")
         )
 
-    @staticmethod
-    def _minimal_fixes(query: str) -> str:
-        """Only null-check and quote fixes for complex queries."""
+    def _minimal_fixes(self, query: str) -> str:
+        """Null-check, quote fixes, and CamelCase→quoted for complex queries."""
         query = query.replace("!= null", '!= ""')
         query = query.replace("is not null", '!= ""')
         query = query.replace("== null", "is null")
         query = query.replace("(drop, reject)", "('drop', 'reject')")
         query = query.replace("(accept, allow)", "('accept', 'allow')")
+        # Also fix CamelCase fields — these are INVALID in the OCI API
+        query = self._fix_field_references(query)
         return query
 
     def _fix_basic_syntax(self, query: str) -> str:
@@ -253,14 +271,35 @@ class QueryEngine:
 
     @staticmethod
     def _fix_field_references(query: str) -> str:
-        """Fix field name quoting/mapping."""
-        mappings = {
+        """Fix field name quoting/mapping.
+
+        All field names verified against live OCI API (2026-03-19).
+        The API requires 'Quoted Space' style for most fields.
+        Unquoted CamelCase (SourceIP, CommandLine, etc.) is INVALID.
+        """
+        # Global mappings (safe for all log sources)
+        global_mappings = {
             "'Event ID'": "'Event Type'",
-            "'Source IP'": "SourceIP",
-            "'Source Port'": "SourcePort",
-            "'Destination IP'": "DestinationIP",
-            "'Destination Port'": "DestinationPort",
+            "'Principal Name'": "'User Name'",
+            "'Client Host'": "'Source IP'",
+            "distinct_count(": "distinctcount(",
         }
-        for old, new in mappings.items():
+        for old, new in global_mappings.items():
             query = query.replace(old, new)
+
+        # Fix unquoted CamelCase → quoted (these are INVALID in the API)
+        # Only apply if not already inside quotes
+        camel_to_quoted = {
+            "SourceIP": "'Source IP'",
+            "SourcePort": "'Source Port'",
+            "DestinationIP": "'Destination IP'",
+            "DestinationPort": "'Destination Port'",
+            "CommandLine": "'Command Line'",
+            "QueryName": "'Query Name'",
+        }
+        for old, new in camel_to_quoted.items():
+            # Avoid replacing if already inside single quotes
+            if old in query and f"'{old}'" not in query:
+                query = query.replace(old, new)
+
         return query

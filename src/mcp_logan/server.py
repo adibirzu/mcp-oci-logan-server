@@ -72,7 +72,7 @@ async def app_lifespan(server: FastMCP):
     from mcp_logan.tools.management import register_management_tools
     from mcp_logan.tools.query import register_query_tools
 
-    register_query_tools(mcp, client, query_engine)
+    register_query_tools(mcp, client, query_engine, catalog)
     register_management_tools(mcp, client, query_engine)
     register_analytics_tools(mcp, client, query_engine)
     register_dashboard_tools(mcp, client, query_engine)

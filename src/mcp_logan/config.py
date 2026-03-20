@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from pydantic import ConfigDict
+from pydantic import AliasChoices, ConfigDict, Field
 from pydantic_settings import BaseSettings
 
 
@@ -20,7 +20,10 @@ class Settings(BaseSettings):
 
     # OCI authentication
     oci_region: str = "eu-frankfurt-1"
-    oci_profile: str = "DEFAULT"
+    oci_profile: str = Field(
+        default="DEFAULT",
+        validation_alias=AliasChoices("OCI_PROFILE", "OCI_CLI_PROFILE"),
+    )
     oci_config_file: str = "~/.oci/config"
 
     # Compartment — if empty, falls back to tenancy root with subtree=True

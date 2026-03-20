@@ -11,6 +11,8 @@
       "env": {
         "MCP_TRANSPORT": "stdio",
         "OCI_REGION": "eu-frankfurt-1",
+        "OCI_PROFILE": "cap",
+        "LOGAN_COMPARTMENT_ID": "ocid1.tenancy.oc1..aaaaaaaahmtamwwppgrqxjej2cu6hu2ixedmzgmncgyfqnwkj4mkycwrqkta",
         "DETECTION_RULES_PATH": "/Users/abirzu/dev/oci-log-analytics-detections/queries"
       }
     }

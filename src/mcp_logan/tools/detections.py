@@ -1,4 +1,4 @@
-"""Detection catalog tools (4 tools)."""
+"""Detection catalog tools (5 tools)."""
 
 from __future__ import annotations
 
@@ -8,9 +8,12 @@ from typing import Annotated, Any
 
 from pydantic import Field
 
+from mcp_logan.core.field_registry import FieldRegistry
 from mcp_logan.core.observability import get_logger
 
 log = get_logger("tools.detections")
+
+field_registry = FieldRegistry()
 
 
 def register_detection_tools(
@@ -51,6 +54,11 @@ def register_detection_tools(
         query = rule.get("query", "")
         if not query:
             return _error(f"Detection rule '{ruleId}' has no query field", format)
+
+        # Validate and fix field names against the log source
+        log_source = _extract_log_source(query)
+        if log_source:
+            query = field_registry.fix_fields(query, log_source)
 
         query = _inject_time(query, timeRange)
 
@@ -179,6 +187,85 @@ def register_detection_tools(
         catalog.initialize()
         stats = catalog.get_stats()
         return json.dumps(stats, indent=2, default=str) if format == "json" else _md("Detection Catalog Statistics", stats)
+
+    @mcp.tool(annotations={"readOnlyHint": True})
+    async def oci_logan_test_detection(
+        ruleId: Annotated[str, Field(description="Detection rule ID to test")],
+        timeRange: Annotated[str, Field(description="Time range")] = "24h",
+        format: Annotated[str, Field(description="Output format")] = "markdown",
+    ) -> str:
+        """Test a detection rule: validate fields, check query syntax, run against live data, and report issues."""
+        catalog.initialize()
+
+        rule = catalog.get_rule(ruleId)
+        if not rule:
+            return _error(f"Detection rule not found: {ruleId}", format)
+
+        query = rule.get("query", "")
+        if not query:
+            return _error(f"Detection rule '{ruleId}' has no query field", format)
+
+        issues: list[str] = []
+        fixes_applied: list[str] = []
+
+        # 1. Validate field names against log source
+        log_source = _extract_log_source(query)
+        if log_source:
+            warnings = field_registry.validate_fields(query, log_source)
+            issues.extend(warnings)
+            fixed_query = field_registry.fix_fields(query, log_source)
+            if fixed_query != query:
+                fixes_applied.append(f"Fixed field names for '{log_source}'")
+                query = fixed_query
+        else:
+            issues.append("No log source detected in query — cannot validate fields")
+
+        # 2. Check for known syntax issues
+        if "!= null" in query:
+            issues.append("Uses '!= null' — should be '!= \"\"' for OCI API")
+        if "is not null" in query:
+            issues.append("Uses 'is not null' — should be '!= \"\"' for OCI API")
+
+        # 3. Execute against live data
+        query_with_time = _inject_time(query, timeRange)
+        time_minutes = query_engine.parse_time_range(timeRange)
+        results = client.execute_query(query_with_time, time_minutes, 10, bypass_transform=True)
+
+        execution_ok = results.get("success", False)
+        total_count = results.get("total_count", 0)
+
+        if not execution_ok:
+            issues.append(f"Query execution failed: {results.get('error', 'unknown')}")
+
+        # 4. Try aliases if zero results
+        alias_tried = []
+        if total_count == 0 and log_source:
+            aliases = query_engine.get_log_source_aliases(log_source)
+            for alias in aliases:
+                if alias == log_source:
+                    continue
+                alias_tried.append(alias)
+                alt_query = _inject_time(query.replace(log_source, alias), timeRange)
+                alt_results = client.execute_query(alt_query, time_minutes, 10, bypass_transform=True)
+                if alt_results.get("total_count", 0) > 0:
+                    fixes_applied.append(f"Log source alias '{alias}' returned results")
+                    total_count = alt_results.get("total_count", 0)
+                    break
+
+        data = {
+            "ruleId": ruleId,
+            "title": rule.get("title", ""),
+            "level": rule.get("level", ""),
+            "logSource": log_source or "unknown",
+            "timeRange": timeRange,
+            "queryValid": execution_ok,
+            "totalRecords": total_count,
+            "issues": issues,
+            "fixesApplied": fixes_applied,
+            "aliasesTried": alias_tried,
+            "verdict": "PASS" if execution_ok and not issues else "WARN" if execution_ok else "FAIL",
+        }
+        return json.dumps(data, indent=2, default=str) if format == "json" else _md("Detection Rule Test", data)
 
 
 # ------------------------------------------------------------------

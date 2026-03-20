@@ -13,7 +13,7 @@ from mcp_logan.core.observability import Timer, get_logger, record_call
 log = get_logger("tools.query")
 
 
-def register_query_tools(mcp: Any, client: Any, query_engine: Any) -> None:
+def register_query_tools(mcp: Any, client: Any, query_engine: Any, catalog: Any = None) -> None:
     """Register query execution tools on the FastMCP app."""
 
     @mcp.tool(annotations={"readOnlyHint": True})
@@ -45,21 +45,48 @@ def register_query_tools(mcp: Any, client: Any, query_engine: Any) -> None:
         limit: Annotated[int, Field(ge=1, le=100, description="Max results")] = 20,
         format: Annotated[str, Field(description="Output format")] = "markdown",
     ) -> str:
-        """Search for security events using natural language or predefined patterns."""
-        # Build query based on event type
-        event_queries = {
-            "login": f"'Event Type' like '%login%' or 'Event Type' like '%signon%' | where Message like '%{searchTerm}%'",
-            "privilege_escalation": f"Severity in ('error', 'critical') and (Message like '%privilege%' or Message like '%sudo%' or Message like '%{searchTerm}%')",
-            "privilege-escalation": f"Severity in ('error', 'critical') and (Message like '%privilege%' or Message like '%sudo%' or Message like '%{searchTerm}%')",
-            "network_anomaly": f"'Log Source' = 'OCI VCN Flow Unified Schema Logs' and Action in ('drop', 'reject') | where Message like '%{searchTerm}%'",
-            "data_exfiltration": f"Message like '%{searchTerm}%' | stats count as events by 'Host Name', 'Log Source'",
-            "malware": f"Message like '%{searchTerm}%' and Severity in ('error', 'critical')",
-        }
+        """Search for security events using detection rules or predefined patterns."""
+        query = None
+        detection_source = None
 
-        if eventType != "all" and eventType in event_queries:
-            query = event_queries[eventType]
-        else:
-            query = f"Message like '%{searchTerm}%' | stats count as events by 'Log Source', Severity | sort -events"
+        # Try detection catalog first — maps event types to curated detection rules
+        if catalog:
+            catalog.initialize()
+            _event_type_keywords: dict[str, str] = {
+                "login": "login",
+                "privilege_escalation": "privilege escalation",
+                "privilege-escalation": "privilege escalation",
+                "network_anomaly": "network anomaly",
+                "data_exfiltration": "exfiltration",
+                "malware": "malware",
+                "brute_force": "brute force",
+                "lateral_movement": "lateral movement",
+            }
+            keyword = _event_type_keywords.get(eventType, searchTerm)
+            matches = catalog.search_rules(keyword=keyword)
+            if matches:
+                best = matches[0]
+                rule_query = best.get("query", "")
+                if rule_query:
+                    query = rule_query
+                    detection_source = best.get("id", "catalog")
+                    log.info("security_event_from_catalog", rule_id=detection_source, keyword=keyword)
+
+        # Fallback to hardcoded event queries
+        if not query:
+            event_queries = {
+                "login": f"'Event Type' like '%login%' or 'Event Type' like '%signon%' | where Message like '%{searchTerm}%'",
+                "privilege_escalation": f"Severity in ('error', 'critical') and (Message like '%privilege%' or Message like '%sudo%' or Message like '%{searchTerm}%')",
+                "privilege-escalation": f"Severity in ('error', 'critical') and (Message like '%privilege%' or Message like '%sudo%' or Message like '%{searchTerm}%')",
+                "network_anomaly": f"'Log Source' = 'OCI VCN Flow Unified Schema Logs' and Action in ('drop', 'reject') | where Message like '%{searchTerm}%'",
+                "data_exfiltration": f"Message like '%{searchTerm}%' | stats count as events by 'Host Name', 'Log Source'",
+                "malware": f"Message like '%{searchTerm}%' and Severity in ('error', 'critical')",
+            }
+
+            if eventType != "all" and eventType in event_queries:
+                query = event_queries[eventType]
+            else:
+                query = f"Message like '%{searchTerm}%' | stats count as events by 'Log Source', Severity | sort -events"
 
         query += f" | head {limit}"
 
@@ -69,7 +96,10 @@ def register_query_tools(mcp: Any, client: Any, query_engine: Any) -> None:
         if not results.get("success"):
             return _error_response(results.get("error", "Security event search failed"), format)
 
-        return _format_query_result("Security Events Search", results, timeRange, time_minutes, format)
+        title = "Security Events Search"
+        if detection_source:
+            title += f" (via detection: {detection_source})"
+        return _format_query_result(title, results, timeRange, time_minutes, format)
 
     @mcp.tool(annotations={"readOnlyHint": True})
     async def oci_logan_get_mitre_techniques(

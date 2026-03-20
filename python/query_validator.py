@@ -87,29 +87,46 @@ class QueryValidator:
         Normalize natural language or SQL-like queries from small LLMs.
         Small LLMs often generate SELECT/FROM syntax or natural language instead
         of proper OCI Logging Analytics syntax.
-        
+
         Returns the correct query if a pattern matches, otherwise returns None.
+        Only applies to queries that are clearly NOT valid OCL syntax.
         """
         import re
         query_lower = query.lower().strip()
-        
+
+        # Skip normalization if query looks like valid OCL syntax
+        # Valid OCL uses patterns like: 'Field' = 'value', | stats, | sort, | head
+        ocl_indicators = [
+            r"'log source'\s*=",           # 'Log Source' = 'xxx'
+            r"'[^']+'\s*=\s*'[^']+'",      # Any 'Field' = 'value' pattern
+            r"\|\s*stats\b",               # | stats
+            r"\|\s*sort\b",                # | sort
+            r"\|\s*where\b",              # | where
+            r"\|\s*head\b",               # | head
+            r"\|\s*eval\b",               # | eval
+            r"\|\s*rename\b",             # | rename
+            r"\|\s*top\b",                # | top
+            r"\*\s*\|",                    # * | (wildcard pipe)
+        ]
+        if any(re.search(pattern, query_lower) for pattern in ocl_indicators):
+            return None
+
         # Check for SQL-like patterns (SELECT, FROM)
         if re.search(r'\bselect\b', query_lower) or re.search(r'\bfrom\s+logs?\b', query_lower):
             # This is likely a malformed SQL query from a small LLM
-            # Try to figure out what they wanted
             for category, config in self.nl_query_patterns.items():
                 for pattern in config['patterns']:
                     if pattern.lower() in query_lower:
                         return config['correct_query']
             # Default for SQL queries about logs: show log sources
             return self.nl_query_patterns['log_sources']['correct_query']
-        
-        # Check for natural language patterns
+
+        # Check for natural language patterns (only for short, non-OCL queries)
         for category, config in self.nl_query_patterns.items():
             for pattern in config['patterns']:
                 if pattern.lower() in query_lower:
                     return config['correct_query']
-        
+
         # No match found, return None to continue with normal processing
         return None
     
@@ -257,26 +274,40 @@ class QueryValidator:
         return query
     
     def _fix_field_references(self, query):
-        """Fix field references based on available log sources"""
-        # Field mappings for different contexts
-        field_mappings = {
+        """Fix field references based on the log source context in the query.
+
+        Field names differ between log sources (e.g., OCI Audit uses 'Principal Name',
+        Windows Sysmon uses 'User', VCN Flow uses unquoted SourceIP).
+        Only apply mappings relevant to the detected log source.
+        """
+        query_lower = query.lower()
+
+        # Universal safe mappings (applicable to any log source)
+        # Verified against live OCI API (2026-03-19)
+        safe_mappings = {
             "'Event ID'": "'Event Type'",
-            "'Event Name'": "'Event Name'",
-            "'Host IP Address (Client)'": "'Source IP'",
-            "'Request Protection Rule IDs'": "'Event Type'",
-            "'User Name'": "'Principal Name'",
-            "'Computer Name'": "'Compartment Name'",
-            "'Source IP'": "SourceIP",  # Remove quotes from field names that work better without them
-            "'Source Port'": "SourcePort",
-            "'Destination IP'": "DestinationIP",
-            "'Destination Port'": "DestinationPort",
-            "'Log Source'": "'Log Source'",  # Keep Log Source as-is when possible
-            "'Content Size Out'": "'Content Size Out'"  # Keep content size fields
+            "'Principal Name'": "'User Name'",
+            "'Client Host'": "'Source IP'",
+            "distinct_count(": "distinctcount(",
         }
-        
-        for old_field, new_field in field_mappings.items():
+
+        # Fix unquoted CamelCase → quoted (INVALID in OCI API)
+        camel_to_quoted = {
+            "SourceIP": "'Source IP'",
+            "SourcePort": "'Source Port'",
+            "DestinationIP": "'Destination IP'",
+            "DestinationPort": "'Destination Port'",
+            "CommandLine": "'Command Line'",
+            "QueryName": "'Query Name'",
+        }
+
+        for old_field, new_field in safe_mappings.items():
             query = query.replace(old_field, new_field)
-        
+
+        for old_field, new_field in camel_to_quoted.items():
+            if old_field in query and f"'{old_field}'" not in query:
+                query = query.replace(old_field, new_field)
+
         return query
     
     def _simplify_complex_operations(self, query):
