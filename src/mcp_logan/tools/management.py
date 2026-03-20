@@ -1,4 +1,4 @@
-"""Resource management tools (11 tools)."""
+"""Resource management tools."""
 
 from __future__ import annotations
 
@@ -58,6 +58,19 @@ def register_management_tools(mcp: Any, client: Any, query_engine: Any) -> None:
             limit=limit,
         )
         return _format(result, "Active Log Sources", format)
+
+    @mcp.tool(annotations={"readOnlyHint": True})
+    async def oci_logan_list_log_groups(
+        compartmentId: Annotated[str, Field(description="OCI compartment OCID")] = "",
+        limit: Annotated[int, Field(ge=1, le=1000, description="Max results")] = 100,
+        format: Annotated[str, Field(description="Output format")] = "markdown",
+    ) -> str:
+        """List available log groups in OCI Logging Analytics."""
+        result = client.list_log_groups(
+            compartment_id=compartmentId or None,
+            limit=limit,
+        )
+        return _format(result, "Log Groups", format)
 
     @mcp.tool(annotations={"readOnlyHint": True})
     async def oci_logan_list_log_fields(

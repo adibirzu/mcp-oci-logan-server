@@ -37,11 +37,26 @@ See [HTTP Transport & OAuth](#http-transport--oauth-authentication) for setup de
 
 A Model Context Protocol (MCP) server that connects Claude to Oracle Cloud Infrastructure (OCI) Logging Analytics, enabling natural language querying and analysis of security logs from the Logan Security Dashboard.
 
+## Current Contract
+
+This repository now has a canonical production path:
+
+- Canonical server: `src/mcp_logan/server.py`
+- Canonical data policy: real OCI Log Analytics data only
+- Canonical detection content source: `DETECTION_RULES_PATH` pointing at `oci-log-analytics-detections/queries`
+
+Important:
+
+- The canonical FastMCP server does **not** return mock, sample, or generated Logan data.
+- Logan tools are expected to use OCI Log Analytics APIs, not OCI Logging Search fallbacks.
+- Historical sections in this README may reference older Python/TypeScript implementations; when they conflict with source, `src/mcp_logan/` is authoritative.
+- Current canonical surface: 44 tools across query, management, analytics, dashboard, detections, and utility categories.
+
 ## Features
 
 ### 🔍 Core Query Execution (Fully Implemented)
-- **Execute Logan Queries**: Direct execution against OCI Logging Analytics API via Python backend
-- **Natural Language Search**: AI-powered conversion of natural language to OCI query syntax
+- **Execute Logan Queries**: Direct execution against OCI Logging Analytics APIs
+- **Detection-first workflows**: Search the detection catalog and execute detections by ID
 - **MITRE ATT&CK Integration**: Search for specific MITRE techniques and tactics with 90-day default range
 - **IP Activity Analysis**: Comprehensive analysis with multiple analysis types (authentication, network, threat_intel)
 - **Time Correlation**: Precise UTC timezone handling for accurate cross-log correlation
@@ -56,12 +71,20 @@ A Model Context Protocol (MCP) server that connects Claude to Oracle Cloud Infra
 - **Statistical Analysis**: Comprehensive statistical operations on log data
 - **Cross-Log Correlation**: Synchronized time periods across different log sources
 
-### 📊 Dashboard Management (Partially Implemented)
-- **List Dashboards**: ⚠️ Returns sample data (not connected to real OCI dashboards)
-- **Dashboard Details**: Basic functionality via Python client
-- **Create/Update Dashboards**: ⚠️ Mock implementations only
-- **Export/Import**: Limited JSON-based functionality
-- **Saved Searches**: ⚠️ Returns sample data (not connected to real OCI saved searches)
+### 📊 Dashboard And Saved Search Operations
+- **List Dashboards**: Real OCI-backed listing
+- **Dashboard Details**: Retrieve dashboard metadata and tiles
+- **Create/Update Dashboards**: OCI-backed dashboard operations via the canonical server path
+- **Export/Import**: JSON-based dashboard portability
+- **Saved Searches**: Real OCI-backed list and execute operations in the canonical FastMCP implementation
+- **Log Groups**: Real OCI-backed log-group discovery exposed from the canonical server
+
+### 🎯 Detection Catalog
+- **Run Detection Rules**: Execute catalog-backed detections against live OCI data
+- **Run Hunting Queries**: Execute advanced hunting queries from the external content catalog
+- **Detection Search**: Search by platform, severity, MITRE, STIG, or keyword
+- **Detection Testing**: Validate and execute rules while checking field/log source issues
+- **Detection Resources**: `detection://` resources expose rules, hunting queries, MITRE coverage, and STIG mapping
 
 ### 🔧 Developer Tools
 - **Query Validation**: Syntax validation with automatic error fixing
@@ -102,7 +125,7 @@ The installer will:
 - ✅ Build TypeScript code
 - ✅ Test the installation
 - ✅ Optionally configure Claude Desktop
-- ✅ Verify all 33 tools are available
+- ✅ Verify the canonical tool surface is available
 
 **That's it!** The script handles everything automatically.
 
@@ -471,10 +494,10 @@ Cross-log event correlation with time synchronization and pattern matching.
 #### `perform_field_operations`
 Field extraction, transformation, and manipulation operations.
 
-### Dashboard Management Tools (Partially Implemented)
+### Dashboard Management Tools
 
-#### `list_dashboards` ⚠️ (Limited Implementation)
-Returns sample dashboard data. Not connected to real OCI Dashboard/Management APIs.
+#### `list_dashboards`
+Lists OCI-backed dashboards from the canonical FastMCP implementation.
 
 **Parameters:**
 - `compartmentId` (optional): OCI compartment OCID 
@@ -482,16 +505,14 @@ Returns sample dashboard data. Not connected to real OCI Dashboard/Management AP
 - `lifecycleState` (optional): Filter by lifecycle state - Default: ACTIVE
 - `limit` (optional): Maximum number of dashboards to return - Default: 50
 
-**Note:** Currently returns mock data. Real OCI dashboard integration pending.
+**Note:** Results depend on OCI permissions and available dashboard content in the target compartment.
 
-#### `get_dashboard` (Partial Implementation)
-Basic dashboard details retrieval via Python client.
+#### `get_dashboard`
+Retrieve detailed dashboard metadata from OCI.
 
 **Parameters:**
 - `dashboardId` (required): OCID of the dashboard to retrieve
 - `compartmentId` (optional): OCI compartment OCID (for validation)
-
-**Note:** Limited functionality. Full implementation requires OCI Management Dashboard SDK.
 
 #### `get_dashboard_tiles`
 Get tiles/widgets from a specific OCI dashboard.
@@ -500,8 +521,8 @@ Get tiles/widgets from a specific OCI dashboard.
 - `dashboardId` (required): OCID of the dashboard
 - `tileType` (optional): Filter tiles by type (all, query, visualization, metric, text)
 
-#### `create_dashboard` ⚠️ (Mock Implementation)
-Returns mock response for dashboard creation. Not connected to real OCI APIs.
+#### `create_dashboard`
+Create a dashboard using the canonical FastMCP implementation.
 
 **Parameters:**
 - `displayName` (required): Display name for the dashboard
@@ -509,10 +530,10 @@ Returns mock response for dashboard creation. Not connected to real OCI APIs.
 - `compartmentId` (optional): OCI compartment OCID
 - `dashboardConfig` (optional): Dashboard configuration
 
-**Note:** Mock implementation only. Real dashboard creation requires OCI SDK integration.
+**Note:** Successful execution depends on OCI permissions and the target dashboard service configuration.
 
-#### `update_dashboard` ⚠️ (Mock Implementation)
-Returns mock response for dashboard updates. Not connected to real OCI APIs.
+#### `update_dashboard`
+Update an existing OCI dashboard.
 
 **Parameters:**
 - `dashboardId` (required): OCID of the dashboard to update
@@ -520,8 +541,6 @@ Returns mock response for dashboard updates. Not connected to real OCI APIs.
 - `description` (optional): New description
 - `addWidgets` (optional): Array of widgets to add
 - `removeWidgetIds` (optional): Array of widget IDs to remove
-
-**Note:** Mock implementation only.
 
 #### `export_dashboard`
 Export dashboard configuration as JSON.
@@ -540,8 +559,8 @@ Import dashboard from JSON configuration.
 
 ### Saved Search Tools
 
-#### `create_saved_search` ⚠️ (Mock Implementation)
-Returns sample data for saved search creation. Not connected to real OCI saved search APIs.
+#### `create_saved_search`
+Create a real OCI-backed saved search.
 
 **Parameters:**
 - `displayName` (required): Display name for the saved search
@@ -550,17 +569,13 @@ Returns sample data for saved search creation. Not connected to real OCI saved s
 - `compartmentId` (optional): OCI compartment OCID
 - `widgetType` (optional): Preferred visualization type - Default: SEARCH
 
-**Note:** Returns mock data. Real implementation pending.
-
-#### `list_saved_searches` ⚠️ (Mock Implementation)
-Returns sample saved search data. Not connected to real OCI APIs.
+#### `list_saved_searches`
+List real OCI-backed saved searches.
 
 **Parameters:**
 - `compartmentId` (optional): OCI compartment OCID
 - `displayName` (optional): Filter by display name
 - `limit` (optional): Maximum number of results - Default: 50
-
-**Note:** Returns sample data only.
 
 ### Utility Tools
 
@@ -693,30 +708,25 @@ npm run test     # Run tests
 
 #### ✅ **Fully Implemented Features:**
 - Core query execution with real OCI API integration
-- 33 MCP tools for security analysis, log querying, and resource management
-- Python backend with OCI SDK integration
+- 40 MCP tools across query, management, analytics, dashboard, detection, and utility categories
+- Canonical FastMCP server in `src/mcp_logan/`
 - Advanced analytics (clustering, NLP, statistical analysis)
 - Query syntax validation and automatic fixing
 - MITRE ATT&CK technique mapping
 - IP address behavioral analysis
 - Time correlation with UTC timezone handling
 - NO mock data policy - all data is real from OCI
+- Detection catalog-backed execution and hunting queries
+- Health reporting for canonical detection content path
 
-#### ⚠️ **Partially Implemented Features:**
-- Dashboard listing (returns sample data)
-- Dashboard details retrieval (basic functionality)
-- Export/import capabilities (limited)
-
-#### ❌ **Mock/Placeholder Features:**
-- Dashboard creation and modification
-- Saved search management
-- RITA network analysis integration
+#### ⚠️ **Operational Caveats:**
+- Dashboard and saved-search operations depend on OCI permissions and service availability
+- The external detection catalog path must exist for detection/hunting features to be available
+- Historical legacy implementations remain in the repo and may not match the canonical server contract
 
 #### 🔧 **Known Technical Issues:**
-- Hardcoded Python script paths (requires manual configuration)
-- Limited error handling for Python process failures
-- Dashboard management APIs not connected to real OCI services
-- Path resolution issues on different systems
+- Legacy docs in `docs/` and `wiki/` still contain older tool counts and older implementation history
+- Some legacy compatibility paths in `python/` and `src/` remain and should not be treated as canonical
 
 ### Git Repository Setup
 
@@ -907,14 +917,14 @@ See [`docs/README.md`](docs/README.md) for a complete documentation index.
 
 - **CRITICAL BUG FIX**: Fixed `list_active_log_sources` returning incomplete results
 - **Fixed Hardcoded Path**: Removed hardcoded path in QueryTransformer.ts
-- **Tool Inventory Corrected**: 33 total tools with accurate implementation status
+- **Tool Inventory Corrected**: historical inventory update for that release line
 
 ### v1.2.0 - Architecture Analysis & Documentation Update (August 2025)
 - Code analysis revealing actual vs documented features
 - Dashboard status clarified with partial/mock implementations
 - Architecture documented with real data flow details
 
-### Implementation Status
+### Current Canonical Implementation Status
 | Feature | Status |
 |---------|--------|
 | Query Execution | ✅ Fully functional with real OCI API |
@@ -922,17 +932,19 @@ See [`docs/README.md`](docs/README.md) for a complete documentation index.
 | OAuth Authentication | ✅ **NEW in v2.0.0** |
 | Security Analytics | ✅ Complete implementation |
 | Resource Discovery | ✅ Fixed in v1.3.0 |
-| Dashboard Management | ⚠️ Partial/mock implementations |
-| Python Backend | ✅ Robust integration with OCI SDK |
+| Dashboard Management | ✅ Canonical FastMCP path is OCI-backed |
+| Saved Search Management | ✅ Canonical FastMCP path is OCI-backed |
+| Detection Catalog | ✅ External canonical catalog-backed |
+| Python Backend | ✅ Robust OCI SDK integration remains available |
 | Time Correlation | ✅ Accurate UTC timezone handling |
 
 ### Next Development Priorities
 1. ✅ ~~HTTP Transport Support~~ **COMPLETED in v2.0.0**
 2. ✅ ~~OAuth Authentication~~ **COMPLETED in v2.0.0**
-3. Implement real OCI Dashboard/Management API integration
-4. Add comprehensive error handling
-5. Implement query template library
-6. Add configuration management system
+3. Reconcile legacy docs with the canonical FastMCP implementation
+4. Strengthen downstream consumer contracts for coordinator/observatory integrations
+5. Add comprehensive contract tests around canonical detection content loading
+6. Continue reducing legacy implementation drift in `python/` and older `src/` paths
 
 **Version**: 2.0.0
 **Last Updated**: December 2025

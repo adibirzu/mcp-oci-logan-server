@@ -1,4 +1,4 @@
-"""Query execution tools (4 tools)."""
+"""Query execution tools."""
 
 from __future__ import annotations
 
@@ -161,6 +161,89 @@ def register_query_tools(mcp: Any, client: Any, query_engine: Any, catalog: Any 
         if format == "json":
             return json.dumps(data, indent=2)
         return _to_markdown("IP Activity Analysis", data)
+
+    @mcp.tool(annotations={"readOnlyHint": True})
+    async def oci_logan_get_summary(
+        timeRange: Annotated[str, Field(description="Time range")] = "24h",
+        format: Annotated[str, Field(description="Output format")] = "markdown",
+    ) -> str:
+        """Get a compact Logan summary across sources, severity, entities, and errors."""
+        time_minutes = query_engine.parse_time_range(timeRange)
+        queries = {
+            "bySource": "* | stats count as logs by 'Log Source' | sort -logs | head 10",
+            "bySeverity": "* | stats count as logs by Severity | sort -logs",
+            "byEntity": "* | stats count as logs by 'Entity Name' | sort -logs | head 10",
+            "errors": "Severity in ('error', 'critical') | stats count as errors by 'Log Source' | sort -errors | head 10",
+        }
+
+        results = {name: client.execute_query(query, time_minutes, 100) for name, query in queries.items()}
+
+        summary = {
+            "timeRange": timeRange,
+            "bySource": [],
+            "bySeverity": {},
+            "byEntity": [],
+            "errorSummary": [],
+            "totalLogs": 0,
+            "totalErrors": 0,
+        }
+
+        for row in results["bySource"].get("results", [])[:10]:
+            source = row.get("Log Source")
+            count = int(row.get("logs", 0) or 0)
+            summary["bySource"].append({"source": source, "count": count})
+            summary["totalLogs"] += count
+
+        for row in results["bySeverity"].get("results", []):
+            severity = row.get("Severity")
+            if severity is not None:
+                summary["bySeverity"][severity] = int(row.get("logs", 0) or 0)
+
+        for row in results["byEntity"].get("results", [])[:10]:
+            entity = row.get("Entity Name")
+            count = int(row.get("logs", 0) or 0)
+            summary["byEntity"].append({"entity": entity, "count": count})
+
+        for row in results["errors"].get("results", [])[:10]:
+            source = row.get("Log Source")
+            count = int(row.get("errors", 0) or 0)
+            summary["errorSummary"].append({"source": source, "errors": count})
+            summary["totalErrors"] += count
+
+        if format == "json":
+            return json.dumps(summary, indent=2, default=str)
+        return _to_markdown("Log Summary", summary)
+
+    @mcp.tool(annotations={"readOnlyHint": True})
+    async def oci_logan_get_entity_logs(
+        entityName: Annotated[str, Field(description="Entity name to search for")],
+        timeRange: Annotated[str, Field(description="Time range")] = "24h",
+        severity: Annotated[str, Field(description="Optional severity filter")] = "",
+        limit: Annotated[int, Field(ge=1, le=1000, description="Max results")] = 100,
+        format: Annotated[str, Field(description="Output format")] = "markdown",
+    ) -> str:
+        """Get logs for a specific entity using real OCI Log Analytics data."""
+        query = f"'Entity Name' = '{entityName}'"
+        if severity:
+            query += f" and Severity = '{severity}'"
+        query += f" | head {limit}"
+
+        time_minutes = query_engine.parse_time_range(timeRange)
+        results = client.execute_query(query, time_minutes, limit)
+        if not results.get("success"):
+            return _error_response(results.get("error", "Entity log query failed"), format)
+
+        data = {
+            "entityName": entityName,
+            "timeRange": timeRange,
+            "severity": severity or "all",
+            "totalRecords": results.get("total_count", 0),
+            "executionTime": f"{results.get('execution_time', 0)}ms",
+            "results": results.get("results", [])[:limit],
+        }
+        if format == "json":
+            return json.dumps(data, indent=2, default=str)
+        return _to_markdown("Entity Logs", data)
 
 
 # ------------------------------------------------------------------

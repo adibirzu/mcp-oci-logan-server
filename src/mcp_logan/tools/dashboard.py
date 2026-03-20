@@ -1,4 +1,4 @@
-"""Dashboard management tools (9 tools)."""
+"""Dashboard management tools."""
 
 from __future__ import annotations
 
@@ -203,9 +203,76 @@ def register_dashboard_tools(mcp: Any, client: Any, query_engine: Any) -> None:
         if not result.get("success"):
             return _error(result.get("error", "Failed to list saved searches"), format)
 
-        items = result.get("results", [])[offset : offset + limit]
-        total = len(result.get("results", []))
+        items = result.get("results", [])
+        if displayName:
+            items = [
+                item for item in items
+                if displayName.lower() in (item.get("display_name") or "").lower()
+            ]
+        total = len(items)
+        items = items[offset : offset + limit]
         return _paginated("Saved Searches", items, total, offset, limit, format)
+
+    @mcp.tool(annotations={"readOnlyHint": True})
+    async def oci_logan_run_saved_search(
+        savedSearchId: Annotated[str, Field(description="Saved search OCID")] = "",
+        searchName: Annotated[str, Field(description="Saved search display name or partial name")] = "",
+        compartmentId: Annotated[str, Field(description="OCI compartment OCID")] = "",
+        timeRange: Annotated[str, Field(description="Time range")] = "24h",
+        limit: Annotated[int, Field(ge=1, le=1000, description="Max results")] = 100,
+        format: Annotated[str, Field(description="Output format")] = "markdown",
+    ) -> str:
+        """Resolve a saved search and execute its OCL query against live OCI data."""
+        search_id = savedSearchId
+        search_meta: dict[str, Any] | None = None
+
+        if not search_id:
+            listed = client.list_saved_searches(
+                compartment_id=compartmentId or None,
+                limit=1000,
+            )
+            if not listed.get("success"):
+                return _error(listed.get("error", "Failed to list saved searches"), format)
+
+            matches = listed.get("results", [])
+            if searchName:
+                search_name_lower = searchName.lower()
+                matches = [
+                    item for item in matches
+                    if search_name_lower in (item.get("display_name") or "").lower()
+                ]
+
+            if not matches:
+                return _error("Saved search not found", format)
+
+            search_meta = matches[0]
+            search_id = search_meta.get("id", "")
+
+        detail = client.get_saved_search(search_id)
+        if not detail.get("success"):
+            return _error(detail.get("error", f"Failed to get saved search: {search_id}"), format)
+
+        search_meta = {**(search_meta or {}), **detail.get("data", {})}
+        query = _extract_query_string(search_meta)
+        if not query:
+            return _error("Saved search does not expose an executable query string", format)
+
+        time_minutes = query_engine.parse_time_range(timeRange)
+        results = client.execute_query(query, time_minutes, limit, bypass_transform=True)
+        if not results.get("success"):
+            return _error(results.get("error", "Saved search execution failed"), format)
+
+        info = {
+            "id": search_meta.get("id", search_id),
+            "displayName": search_meta.get("display_name", ""),
+            "description": search_meta.get("description", ""),
+            "timeRange": timeRange,
+            "query": query[:300],
+            "totalRecords": results.get("total_count", 0),
+            "executionTime": f"{results.get('execution_time', 0)}ms",
+            "results": results.get("results", [])[:50],
+        }
+        return _fmt("Saved Search Results", info, format)
 
     @mcp.tool(annotations={"readOnlyHint": True})
     async def oci_logan_export_dashboard(
@@ -282,6 +349,54 @@ def _error(msg: str, fmt: str) -> str:
     if fmt == "json":
         return json.dumps({"error": msg, "success": False}, indent=2)
     return f"**Error:** {msg}"
+
+
+def _extract_query_string(payload: Any) -> str:
+    """Recursively search a saved-search payload for a query string."""
+    query_keys = {
+        "query",
+        "query_string",
+        "queryString",
+        "searchQuery",
+        "search_query",
+        "queryText",
+        "query_text",
+    }
+
+    if isinstance(payload, dict):
+        for key in query_keys:
+            value = payload.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+        for value in payload.values():
+            found = _extract_query_string(value)
+            if found:
+                return found
+        return ""
+
+    if isinstance(payload, list):
+        for item in payload:
+            found = _extract_query_string(item)
+            if found:
+                return found
+        return ""
+
+    if isinstance(payload, str):
+        text = payload.strip()
+        if not text:
+            return ""
+        if text.startswith("{") or text.startswith("["):
+            try:
+                parsed = json.loads(text)
+            except Exception:
+                return ""
+            return _extract_query_string(parsed)
+        return ""
+
+    if hasattr(payload, "__dict__"):
+        return _extract_query_string(vars(payload))
+
+    return ""
 
 
 def _fmt(title: str, data: dict[str, Any], fmt: str) -> str:

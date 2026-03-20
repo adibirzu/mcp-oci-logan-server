@@ -546,10 +546,10 @@ class LoganClient:
                     "lifecycle_state": getattr(d, "lifecycle_state", "ACTIVE"),
                     "time_created": str(getattr(d, "time_created", "")),
                 })
-            return {"success": True, "data": dashboards}
+            return {"success": True, "results": dashboards, "total_count": len(dashboards)}
         except Exception as e:
             log.error("list_dashboards_error", error=str(e))
-            return {"success": False, "error": str(e), "data": []}
+            return {"success": False, "error": str(e), "results": [], "total_count": 0}
 
     def get_dashboard(self, dashboard_id: str) -> dict[str, Any]:
         try:
@@ -560,12 +560,13 @@ class LoganClient:
             return {
                 "success": True,
                 "data": {
-                    "displayName": getattr(d, "display_name", ""),
+                    "id": dashboard_id,
+                    "display_name": getattr(d, "display_name", ""),
                     "description": getattr(d, "description", ""),
-                    "lifecycleState": getattr(d, "lifecycle_state", "ACTIVE"),
-                    "timeCreated": str(getattr(d, "time_created", "")),
-                    "timeUpdated": str(getattr(d, "time_updated", "")),
-                    "widgets": getattr(d, "saved_searches", []),
+                    "lifecycle_state": getattr(d, "lifecycle_state", "ACTIVE"),
+                    "time_created": str(getattr(d, "time_created", "")),
+                    "time_updated": str(getattr(d, "time_updated", "")),
+                    "widgets": getattr(d, "tiles", []) or getattr(d, "saved_searches", []),
                     "config": getattr(d, "config", {}),
                 },
             }
@@ -574,17 +575,60 @@ class LoganClient:
             return {"success": False, "error": str(e), "data": {}}
 
     def list_saved_searches(self, compartment_id: str | None = None, limit: int = 20) -> dict[str, Any]:
-        assert self._client is not None
         try:
-            response = self._client.list_log_analytics_em_bridges(
-                namespace_name=self._namespace,
+            import oci.management_dashboard
+            dashboard_client = oci.management_dashboard.DashxApisClient(self._config)
+            response = dashboard_client.list_management_saved_searches(
                 compartment_id=compartment_id or self.compartment_id,
                 limit=limit,
             )
-            # Fallback: saved searches via log analytics
-            return {"success": True, "data": [], "total_count": 0}
-        except Exception:
-            return {"success": True, "data": [], "total_count": 0}
+            searches = []
+            for item in response.data.items:
+                searches.append({
+                    "id": getattr(item, "id", ""),
+                    "display_name": getattr(item, "display_name", ""),
+                    "description": getattr(item, "description", ""),
+                    "lifecycle_state": getattr(item, "lifecycle_state", "ACTIVE"),
+                    "time_created": str(getattr(item, "time_created", "")),
+                    "time_updated": str(getattr(item, "time_updated", "")),
+                })
+            return {"success": True, "results": searches, "total_count": len(searches)}
+        except Exception as e:
+            log.error("list_saved_searches_error", error=str(e))
+            return {"success": False, "error": str(e), "results": [], "total_count": 0}
+
+    def get_saved_search(self, saved_search_id: str) -> dict[str, Any]:
+        try:
+            import oci.management_dashboard
+            dashboard_client = oci.management_dashboard.DashxApisClient(self._config)
+            response = dashboard_client.get_management_saved_search(
+                management_saved_search_id=saved_search_id,
+            )
+            item = response.data
+            return {
+                "success": True,
+                "data": {
+                    "id": saved_search_id,
+                    "display_name": getattr(item, "display_name", ""),
+                    "description": getattr(item, "description", ""),
+                    "lifecycle_state": getattr(item, "lifecycle_state", "ACTIVE"),
+                    "time_created": str(getattr(item, "time_created", "")),
+                    "time_updated": str(getattr(item, "time_updated", "")),
+                    "provider_id": getattr(item, "provider_id", ""),
+                    "provider_version": getattr(item, "provider_version", ""),
+                    "screen_image": getattr(item, "screen_image", None),
+                    "ui_config": getattr(item, "ui_config", None),
+                    "drilldown_config": getattr(item, "drilldown_config", None),
+                    "metadata_version": getattr(item, "metadata_version", None),
+                    "data_config": getattr(item, "data_config", None),
+                    "type": getattr(item, "type", None),
+                    "nls": getattr(item, "nls", None),
+                    "features_config": getattr(item, "features_config", None),
+                },
+            }
+        except Exception as e:
+            log.error("get_saved_search_error", error=str(e), saved_search_id=saved_search_id)
+            return {"success": False, "error": str(e), "data": {}}
 
     # ------------------------------------------------------------------
     # Private helpers

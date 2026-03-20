@@ -50,6 +50,7 @@ async def app_lifespan(server: FastMCP):
     # Core
     query_engine = QueryEngine()
     client = LoganClient()
+    detection_content = settings.detection_content_status()
     try:
         client.initialize()
     except Exception as exc:
@@ -62,6 +63,15 @@ async def app_lifespan(server: FastMCP):
         catalog.initialize()
     except Exception as exc:
         log.error("catalog_init_failed", error=str(exc))
+
+    if not detection_content["rulesPathExists"] or not detection_content["catalogExists"]:
+        log.warning(
+            "detection_content_invalid",
+            rules_path=detection_content["rulesPath"],
+            catalog_path=detection_content["catalogPath"],
+            rules_path_exists=detection_content["rulesPathExists"],
+            catalog_exists=detection_content["catalogExists"],
+        )
 
     # Register all modules
     from mcp_logan.prompts.security_workflows import register_security_prompts
@@ -92,6 +102,7 @@ async def app_lifespan(server: FastMCP):
         transport=settings.mcp_transport,
         region=settings.region,
         catalog=catalog_status,
+        detection_rules_path=detection_content["rulesPath"],
     )
 
     yield
@@ -105,8 +116,13 @@ async def app_lifespan(server: FastMCP):
 
 INSTRUCTIONS = """OCI Logging Analytics MCP Server v{version}
 
-This server provides 39 tools for querying, managing, and analyzing
-OCI Logging Analytics data, plus detection rules for threat hunting.
+This server provides 44 real-data tools for querying, managing, and analyzing
+OCI Logging Analytics data, plus catalog-backed detections and hunting queries.
+
+Canonical production contract:
+- No mock, sample, or generated Logan data is returned by this server
+- Logan tools use OCI Log Analytics APIs, not OCI Logging Search fallbacks
+- Detection and hunting content is loaded from the canonical external catalog at `DETECTION_RULES_PATH`
 
 ## Quick Start
 - Use `oci_logan_health` to verify connectivity
@@ -160,6 +176,7 @@ def _register_utility_tools(
                 "hunting": catalog_summary.get("totalHunting", 0),
                 "platforms": catalog_summary.get("platforms", {}),
             },
+            "contentSource": settings.detection_content_status(),
         }
 
         # Quick connection test (namespace not exposed for security)
@@ -173,6 +190,11 @@ def _register_utility_tools(
             info["status"] = "degraded"
             info["ociConnected"] = False
             info["error"] = str(exc)
+
+        content_source = info["contentSource"]
+        if not content_source["rulesPathExists"] or not content_source["catalogExists"]:
+            info["status"] = "degraded"
+            info["contentError"] = "Canonical detection content path is missing or incomplete"
 
         if detail:
             info["timestamp"] = datetime.now(timezone.utc).isoformat()
@@ -240,8 +262,8 @@ def _register_utility_tools(
         """Get documentation for the MCP server capabilities."""
         docs: dict[str, str] = {
             "ocl": "Read the resource `detection://ocl/reference` for OCL query language syntax and patterns.",
-            "tools": "39 tools across categories: query (4), management (11), analytics (5), dashboard (9), detections (4), utility (6). Use `oci_logan_health` to verify connectivity.",
-            "detections": "200 detection rules organized by platform (oci/linux/windows), severity, and MITRE ATT&CK mapping. Browse with `detection://rules/summary`, search with `oci_logan_search_detections`, execute with `oci_logan_run_detection`.",
+            "tools": "44 tools across categories: query (6), management (12), analytics (5), dashboard (10), detections (5), utility (6). Use `oci_logan_health` to verify OCI connectivity and canonical content availability.",
+            "detections": "Detection and hunting content is loaded from the canonical external catalog configured by `DETECTION_RULES_PATH`. Browse with `detection://rules/summary`, search with `oci_logan_search_detections`, and execute with `oci_logan_run_detection`.",
             "resources": "11 MCP resources under `detection://` — catalog summary, rules, hunting queries, MITRE coverage, STIG controls, and OCL reference. Use parameterized URIs like `detection://rules/{ruleId}`.",
             "prompts": "6 security workflow prompts: security-triage, threat-hunt, incident-investigation, compliance-check, detection-coverage-gap, daily-security-brief.",
         }
@@ -286,6 +308,8 @@ def _register_utility_tools(
                 "Use cache-first where available; prefer concise queries",
                 "Limit time ranges to reduce cost; default 24h unless specified",
                 "Use 7d+ time ranges for hunting queries",
+                "This canonical server does not return mock or sample Logan data",
+                "Use oci_logan_health after deployment to verify the external detection catalog path is valid",
                 "Return markdown for chat UIs, json for programmatic use",
             ],
         }
