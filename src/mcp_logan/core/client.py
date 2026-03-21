@@ -42,28 +42,47 @@ class LoganClient:
     # ------------------------------------------------------------------
 
     def initialize(self) -> None:
-        """Load OCI config, create clients, resolve namespace."""
+        """Load OCI config, create clients, resolve namespace.
+
+        Auth priority:
+        1. Instance principal (OKE, compute instances)
+        2. Config file (~/.oci/config)
+        3. Fallback to env vars (LOGAN_COMPARTMENT_ID)
+        """
         if self._initialized:
             return
 
-        self._config = self._load_oci_config()
-        self._config["region"] = settings.region
+        auth_method = "config_file"
 
-        self._client = oci.log_analytics.LogAnalyticsClient(self._config)
+        # Try instance principal first (for OKE/cloud deployments)
+        try:
+            ip_signer = oci.auth.signers.InstancePrincipalsSecurityTokenSigner()
+            self._signer = ip_signer
+            self._config = {"region": settings.region}
+            self._client = oci.log_analytics.LogAnalyticsClient(
+                config={},
+                signer=ip_signer,
+            )
+            auth_method = "instance_principal"
+            log.info("instance_principal_auth", region=settings.region)
+        except Exception:
+            # Fall back to config file
+            self._config = self._load_oci_config()
+            self._config["region"] = settings.region
+            self._client = oci.log_analytics.LogAnalyticsClient(self._config)
+            self._signer = Signer(
+                tenancy=self._config["tenancy"],
+                user=self._config["user"],
+                fingerprint=self._config["fingerprint"],
+                private_key_file_location=self._config["key_file"],
+                pass_phrase=self._config.get("pass_phrase"),
+            )
+
         self._namespace = self._resolve_namespace()
-
-        # Create signer for HTTP-based queries
-        self._signer = Signer(
-            tenancy=self._config["tenancy"],
-            user=self._config["user"],
-            fingerprint=self._config["fingerprint"],
-            private_key_file_location=self._config["key_file"],
-            pass_phrase=self._config.get("pass_phrase"),
-        )
-
         self._initialized = True
         log.info(
             "client_initialized",
+            auth_method=auth_method,
             region=settings.region,
             namespace=self._namespace,
             compartment=self.compartment_id[:30] + "..." if len(self.compartment_id) > 30 else self.compartment_id,
@@ -71,8 +90,13 @@ class LoganClient:
 
     @property
     def compartment_id(self) -> str:
-        """Effective compartment — env var or tenancy root."""
-        return settings.logan_compartment_id or self._config.get("tenancy", "")
+        """Effective compartment — env var, signer tenancy, or config tenancy."""
+        if settings.logan_compartment_id:
+            return settings.logan_compartment_id
+        # Instance principal signer exposes tenancy_id
+        if hasattr(self._signer, "tenancy_id"):
+            return self._signer.tenancy_id
+        return self._config.get("tenancy", "")
 
     @property
     def namespace(self) -> str:
@@ -656,7 +680,10 @@ class LoganClient:
     def _resolve_namespace(self) -> str:
         """Get tenancy namespace from Object Storage."""
         try:
-            os_client = oci.object_storage.ObjectStorageClient(self._config)
+            if isinstance(self._signer, oci.auth.signers.InstancePrincipalsSecurityTokenSigner):
+                os_client = oci.object_storage.ObjectStorageClient(config={}, signer=self._signer)
+            else:
+                os_client = oci.object_storage.ObjectStorageClient(self._config)
             return os_client.get_namespace().data
         except Exception as e:
             raise RuntimeError(f"Failed to get namespace: {e}") from e
@@ -675,7 +702,7 @@ class LoganClient:
             "queryString": query,
             "shouldRunAsync": False,
             "shouldIncludeTotalCount": True,
-            "compartmentId": self._config["tenancy"],
+            "compartmentId": self.compartment_id,
             "compartmentIdInSubtree": True,  # FIX #1: Always search all sub-compartments
             "timeFilter": {
                 "timeStart": start_time.isoformat().replace("+00:00", "Z"),
